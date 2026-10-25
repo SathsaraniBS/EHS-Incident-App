@@ -1,0 +1,22 @@
+# Python Virtual Environments & Caches
+server/venv/
+server/__pycache__/
+*.pyc
+
+# Environment Files & Passwords
+.env
+.env.local
+
+# Node.js Modules & Builds
+node_modules/
+admin-dashboard/node_modules/
+client/node_modules/
+.next/
+admin-dashboard/.next/
+client/.expo/
+client/dist/
+
+# System & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
