@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Search, ShieldCheck, Users, FileText, BarChart2, ArrowRight, X } from 'lucide-react';
-import Sidebar from '@/components/Sidebar';
+import { Search, ShieldCheck, Users, FileText, BarChart2 } from 'lucide-react';
+
 interface SectionSummary {
   id: number;
-  name: name;
+  name: string;
   responsible_person: string;
   total_items: number;
   allocated_score: number;
@@ -44,11 +44,9 @@ export default function SectionsDashboard() {
   const totalAllocatedMarks = sections.reduce((acc, curr) => acc + curr.allocated_score, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-
+    <div className="text-slate-800">
       {/* Main Content Area */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <div>
         <div className="max-w-7xl mx-auto mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -145,7 +143,7 @@ export default function SectionsDashboard() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

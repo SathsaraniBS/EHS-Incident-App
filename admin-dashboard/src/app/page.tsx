@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   }, [incidents, selectedSection, searchTerm]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
+    <div className="text-slate-800">
       {/* Header */}
       <header className="mb-8 flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 md:flex-row md:items-center">
         <div>
