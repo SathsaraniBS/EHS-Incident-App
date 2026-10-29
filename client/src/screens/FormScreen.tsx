@@ -144,7 +144,7 @@ export function FormScreen() {
           onChangeText={setAssignedTo} 
         />
 
-        <Text style={styles.label}>Finding / Description:</Text>
+        <Text style={styles.label}>Issue Description:</Text>
         <TextInput 
           style={[styles.input, styles.textArea]} 
           multiline 
