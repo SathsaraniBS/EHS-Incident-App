@@ -44,7 +44,7 @@ export default function Sidebar() {
       {/* User Session Info */}
       <div className="pt-4 border-t border-slate-800 text-xs text-gray-400">
         <p>Logged in as:</p>
-        <p className="text-gray-200 font-semibold mt-0.5">Batarenage Sanduni Sathsarani (BSS)</p>
+        <p className="text-gray-200 font-semibold mt-0.5"> (BSS)</p>
       </div>
     </aside>
   );
