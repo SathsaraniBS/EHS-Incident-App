@@ -8,7 +8,9 @@ import {
   Award, 
   TrendingUp, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  User,
+  FileText
 } from 'lucide-react';
 
 interface ChecklistItem {
@@ -85,86 +87,99 @@ export default function SectionDetailPage() {
   const scorePct = Math.round((totalActual / totalAllocated) * 100) || 0;
 
   return (
-    <div className="w-full min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-8 space-y-6">
-      {/* Back Button & Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+    <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6">
+      {/* Back Button & Header Navigation */}
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
         <button 
           onClick={() => router.back()}
-          className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 transition"
+          className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 text-slate-500" />
           <span>Back to Sections</span>
         </button>
 
         <div className="text-right">
-          <span className="text-xs uppercase tracking-wider text-blue-400 font-semibold">{section.category}</span>
-          <p className="text-xs text-slate-400">Responsible: <span className="text-slate-200 font-medium">{section.responsible}</span></p>
+          <span className="text-xs uppercase tracking-wider text-red-600 font-semibold">{section.category}</span>
+          <p className="text-xs text-slate-500 flex items-center justify-end gap-1 mt-0.5">
+            <User className="w-3.5 h-3.5 text-slate-400" />
+            Responsible: <span className="font-semibold text-slate-800">{section.responsible}</span>
+          </p>
         </div>
       </div>
 
-      {/* Section Title & Summary */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-900/60 p-6 rounded-xl border border-slate-800 shadow-lg">
+      {/* Section Title & Summary KPI Cards Bar */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
-            <ShieldCheck className="w-8 h-8 text-blue-500" />
+          <div className="flex items-center gap-2 text-red-600 text-xs font-semibold uppercase tracking-wider mb-1">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Detailed Audit Checklist</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
             {section.name}
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Detailed Health, Safety & Environment Audit Checklist & Scoring</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">
+            Inspecting health, safety & environmental evaluation criteria and compliance findings.
+          </p>
         </div>
 
-        <div className="flex items-center gap-4 bg-slate-950/80 p-4 rounded-xl border border-slate-800">
-          <div>
-            <span className="text-xs text-slate-400 block">Allocated Score</span>
-            <span className="text-xl font-bold text-slate-200">{totalAllocated} pts</span>
+        {/* Metric Summary Boxes */}
+        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 shrink-0">
+          <div className="text-center px-3">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Allocated</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-slate-900">{totalAllocated}</span>
           </div>
-          <div className="h-8 w-[1px] bg-slate-800" />
-          <div>
-            <span className="text-xs text-slate-400 block">Actual Score</span>
-            <span className="text-xl font-bold text-amber-400">{totalActual} pts</span>
+          <div className="text-center px-3 border-x border-slate-200">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Actual</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-amber-600">{totalActual}</span>
           </div>
-          <div className="h-8 w-[1px] bg-slate-800" />
-          <div>
-            <span className="text-xs text-slate-400 block">Achievement</span>
-            <span className="text-xl font-bold text-emerald-400">{scorePct}%</span>
+          <div className="text-center px-3">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Score %</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-emerald-600">{scorePct}%</span>
           </div>
         </div>
       </div>
 
-      {/* Checklist Table */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-200">Audit Checklist & Findings</h3>
-          <span className="text-xs text-slate-400">{section.items.length} criteria evaluated</span>
+      {/* Checklist Table Container */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-slate-500" />
+            <h3 className="font-bold text-slate-800 text-sm sm:text-base">Audit Criteria & Findings</h3>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">
+            {section.items.length} Evaluated Items
+          </span>
         </div>
+
         <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <table className="w-full text-left text-xs sm:text-sm text-slate-700">
+            <thead className="bg-slate-100/80 text-[11px] sm:text-xs uppercase tracking-wider text-slate-600 border-b border-slate-200 font-semibold">
               <tr>
-                <th className="py-3 px-4 w-12 text-center">#</th>
-                <th className="py-3 px-4">Audit Description / Criterion</th>
-                <th className="py-3 px-4 text-right">Allocated</th>
-                <th className="py-3 px-4 text-right">Actual</th>
-                <th className="py-3 px-4 text-right">Adjustable</th>
-                <th className="py-3 px-4">Remark / Observation</th>
+                <th className="py-3.5 px-4 w-12 text-center">#</th>
+                <th className="py-3.5 px-4">Audit Description / Criterion</th>
+                <th className="py-3.5 px-4 text-right">Allocated</th>
+                <th className="py-3.5 px-4 text-right">Actual</th>
+                <th className="py-3.5 px-4 text-right">Adjustable</th>
+                <th className="py-3.5 px-4">Remark / Observation</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {section.items.map((item, idx) => (
-                <tr key={item.id} className="hover:bg-slate-800/40 transition">
-                  <td className="py-3 px-4 text-center font-mono text-slate-500">{idx + 1}</td>
-                  <td className="py-3 px-4 text-slate-200 font-medium">{item.description}</td>
-                  <td className="py-3 px-4 text-right font-mono text-slate-300">{item.allocated}</td>
-                  <td className="py-3 px-4 text-right font-mono text-amber-400 font-semibold">{item.actual}</td>
-                  <td className="py-3 px-4 text-right font-mono text-emerald-400 font-semibold">{item.adjustable}</td>
-                  <td className="py-3 px-4 text-slate-400 text-xs">
+                <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                  <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-medium">{idx + 1}</td>
+                  <td className="py-3.5 px-4 text-slate-800 font-medium leading-relaxed">{item.description}</td>
+                  <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700">{item.allocated}</td>
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600">{item.actual}</td>
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">{item.adjustable}</td>
+                  <td className="py-3.5 px-4 text-xs">
                     {item.remark ? (
-                      <span className="text-rose-400 flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 text-rose-700 border border-rose-200 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-500" />
                         {item.remark}
                       </span>
                     ) : (
-                      <span className="text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
                         Compliant
                       </span>
                     )}
