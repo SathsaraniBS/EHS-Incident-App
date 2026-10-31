@@ -18,14 +18,16 @@ export interface Incident {
   severity?: string;
 }
 
+/** If the image URL is relative, it is prefixed with the API base URL. */
+export const resolveImageUrl = (imageUrl?: string | null): string | null => {
+  if (!imageUrl) return null;
+  return imageUrl.startsWith('http') ? imageUrl : `${API_BASE_URL}${imageUrl}`;
+};
+
+/** If an error occurs, it is thrown so that an error message can be displayed on the UI. */
 export const fetchIncidents = async (): Promise<Incident[]> => {
-  try {
-    const response = await api.get('/api/v1/incidents/');
-    return Array.isArray(response.data) ? response.data : (response.data?.incidents || []);
-  } catch (error) {
-    console.error('Error fetching incidents:', error);
-    return [];
-  }
+  const response = await api.get('/api/v1/incidents/');
+  return Array.isArray(response.data) ? response.data : response.data?.incidents || [];
 };
 
 export const updateIncidentStatus = async (id: number, status: string, severity: string) => {

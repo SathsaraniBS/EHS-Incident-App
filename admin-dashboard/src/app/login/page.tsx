@@ -1,8 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, Lock, Mail, ArrowRight, UserCheck } from 'lucide-react';
+import { homeForRole, setSession, type Session } from '@/lib/auth';
+
+// ⚠️ DEMO ONLY: In production, replace these with a backend API, hashed passwords, and an httpOnly JWT cookie.
+const DEMO_USERS: Record<string, { password: string; session: Session }> = {
+  'admin@bondville.lk': {
+    password: 'Admin@2026',
+    session: { email: 'admin@bondville.lk', role: 'admin', name: 'BSS (Turnaround Coordinator)' },
+  },
+  'client@bondville.lk': {
+    password: 'Client@2026',
+    session: { email: 'client@bondville.lk', role: 'client', name: 'Client Auditor' },
+  },
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,7 +24,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Pre-configured test credentials helper
+  // If an old localStorage session remains, it is cleared.
+  useEffect(() => {
+    localStorage.removeItem('bondville_user');
+  }, []);
+
   const fillCredentials = (role: 'admin' | 'client') => {
     if (role === 'admin') {
       setEmail('admin@bondville.lk');
@@ -29,18 +46,16 @@ export default function LoginPage() {
     setError('');
 
     setTimeout(() => {
-      if (email === 'admin@bondville.lk' && password === 'Admin@2026') {
-        // Save session role
-        localStorage.setItem('bondville_user', JSON.stringify({ email, role: 'admin', name: 'BSS (Turnaround Coordinator)' }));
-        router.push('/'); // Redirect to Admin Dashboard
-      } else if (email === 'client@bondville.lk' && password === 'Client@2026') {
-        localStorage.setItem('bondville_user', JSON.stringify({ email, role: 'client', name: 'Client Auditor' }));
-        router.push('/sections'); // Redirect to client-facing view
+      const user = DEMO_USERS[email.trim().toLowerCase()];
+
+      if (user && user.password === password) {
+        setSession(user.session);
+        router.replace(homeForRole(user.session.role));
       } else {
         setError('Invalid credentials. Please use the quick fill buttons below.');
         setIsLoading(false);
       }
-    }, 800);
+    }, 600);
   };
 
   return (
@@ -51,14 +66,18 @@ export default function LoginPage() {
           <ShieldAlert className="w-6 h-6 text-red-600" />
         </div>
         <h1 className="text-2xl font-extrabold tracking-wider text-white">BONDVILLE</h1>
-        <p className="text-xs uppercase tracking-widest text-red-500 font-semibold">EHS Incident & Audit Portal</p>
+        <p className="text-xs uppercase tracking-widest text-red-500 font-semibold">
+          EHS Incident & Audit Portal
+        </p>
       </div>
 
       {/* Login Card */}
       <div className="w-full max-w-md bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-white">Secure Sign In</h2>
-          <p className="text-xs text-zinc-400 mt-1">Enter your corporate credentials to access the dashboard.</p>
+          <p className="text-xs text-zinc-400 mt-1">
+            Enter your corporate credentials to access the dashboard.
+          </p>
         </div>
 
         {error && (
@@ -69,7 +88,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">Corporate Email</label>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">
+              Corporate Email
+            </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
@@ -84,7 +105,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">Password</label>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">
+              Password
+            </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
@@ -101,7 +124,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-red-950 flex items-center justify-center gap-2 group"
+            className="w-full mt-2 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-70 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-red-950 flex items-center justify-center gap-2 group"
           >
             {isLoading ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -114,7 +137,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Quick Testing Credentials Helper Box */}
+        {/* Quick Testing Credentials (Demo only – remove in production) */}
         <div className="mt-8 pt-6 border-t border-zinc-800/80 space-y-3">
           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block text-center">
             Quick Test Credentials (Click to Fill)

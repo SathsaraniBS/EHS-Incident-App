@@ -1,136 +1,135 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Incident, API_BASE_URL } from '@/services/api';
+import { Incident, resolveImageUrl } from '@/services/api';
 
-// Excel Export Helper
+const today = () => new Date().toISOString().split('T')[0];
+const formatDate = (d?: string | null) => (d ? new Date(d).toLocaleString() : 'N/A');
+
+// ---------- Excel (CSV) ----------
+const escapeCsv = (value: unknown): string =>
+  `"${String(value ?? '').replace(/"/g, '""')}"`;
+
 export const exportToExcel = (incidents: Incident[]) => {
-  const headers = ['ID', 'Section', 'Location', 'Description', 'Image URL', 'Date & Time'];
-  const rows = incidents.map(item => [
+  const headers = ['ID', 'Section', 'Location', 'Description', 'Severity', 'Status', 'Image URL', 'Date & Time'];
+
+  const rows = incidents.map((item) => [
     `#${item.id}`,
     item.section,
     item.location,
     item.description,
-    item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `${API_BASE_URL}${item.image_url}`) : 'No Image',
-    item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'
+    item.severity || 'Medium',
+    item.status || 'Pending',
+    resolveImageUrl(item.image_url) ?? 'No Image',
+    formatDate(item.created_at),
   ]);
 
-  let csvContent = 'data:text/csv;charset=utf-8,' + 
-    [headers.join(','), ...rows.map(e => e.map(val => `"${val}"`).join(','))].join('\n');
+  const csv = [headers, ...rows].map((r) => r.map(escapeCsv).join(',')).join('\r\n');
 
-  const encodedUri = encodeURI(csvContent);
+  // The BOM (﻿) helps Excel read UTF-8 correctly.
+  // Since a Blob is used, the bug where data gets truncated due to the '#' character does not occur.
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
   const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
-  link.setAttribute('download', `EHS_Audit_Reports_${new Date().toISOString().split('T')[0]}.csv`);
+  link.href = url;
+  link.download = `EHS_Audit_Reports_${today()}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
-// Helper function to convert image URL to Base64
-const getBase64ImageFromURL = (url: string): Promise<string> => {
-  return new Promise((resolve) => {
+// ---------- PDF ----------
+const getBase64ImageFromURL = (url: string): Promise<string> =>
+  new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'Anonymous';
+    img.crossOrigin = 'Anonymous'; // CORS must be enabled on the backend.
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg'));
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d')?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      } catch {
+        resolve('');
+      }
     };
     img.onerror = () => resolve('');
     img.src = url;
   });
-};
 
-// PDF Export Helper with Fixed Image Fitting
 export const exportToPDF = async (incidents: Incident[]) => {
-  const doc = new jsPDF('p', 'mm', 'a4');
+  const doc = new jsPDF('l', 'mm', 'a4'); // landscape
 
   doc.setFontSize(16);
   doc.setTextColor(30, 41, 59);
-  doc.text('EHS Incident & Safety Audit Reports', 14, 20);
+  doc.text('EHS Incident & Safety Audit Reports', 14, 18);
 
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 24);
 
-  const tableRows: any[] = [];
+  // All images are loaded simultaneously (in parallel).
+  const images = await Promise.all(
+    incidents.map(async (item) => {
+      const url = resolveImageUrl(item.image_url);
+      return url ? getBase64ImageFromURL(url) : '';
+    })
+  );
 
-  for (const item of incidents) {
-    let imgData = '';
-    const imgFullUrl = item.image_url
-      ? item.image_url.startsWith('http')
-        ? item.image_url
-        : `${API_BASE_URL}${item.image_url}`
-      : null;
+  const IMG_COL = 6;
+  const IMG_SIZE = 14;
 
-    if (imgFullUrl) {
-      try {
-        imgData = await getBase64ImageFromURL(imgFullUrl);
-      } catch (e) {
-        console.error('Error loading image for PDF:', e);
-      }
-    }
-
-    tableRows.push([
-      `#${item.id}`,
-      item.section,
-      item.location,
-      item.description,
-      imgData ? { content: '', image: imgData, width: 14, height: 14 } : 'No Image',
-      item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'
-    ]);
-  }
+  const body = incidents.map((item, idx) => [
+    `#${item.id}`,
+    item.section,
+    item.location,
+    item.description,
+    item.severity || 'Medium',
+    item.status || 'Pending',
+    images[idx] ? '' : 'No Image',
+    formatDate(item.created_at),
+  ]);
 
   autoTable(doc, {
-    startY: 32,
-    head: [['ID', 'Section', 'Location', 'Description', 'Evidence', 'Date & Time']],
-    body: tableRows,
+    startY: 30,
+    head: [['ID', 'Section', 'Location', 'Description', 'Severity', 'Status', 'Evidence', 'Date & Time']],
+    body,
     theme: 'grid',
     headStyles: { fillColor: [37, 99, 235] },
     styles: { fontSize: 8, cellPadding: 3, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 12 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 45 },
-      4: { cellWidth: 20, halign: 'center' },
-      5: { cellWidth: 35 }
+      0: { cellWidth: 14 },
+      1: { cellWidth: 32 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 70 },
+      4: { cellWidth: 20 },
+      5: { cellWidth: 22 },
+      6: { cellWidth: 24, halign: 'center' },
+      7: { cellWidth: 45 },
     },
-    // Sets the minimum height (minHeight) of the row to be sufficient for the photograph.
+    // I am setting a minimum height for the rows that contain the photo.
     didParseCell: (data) => {
-      if (data.section === 'body' && data.column.index === 4) {
-        const cellValue: any = data.row.raw[4];
-        if (cellValue && cellValue.image) {
-          data.row.height = 18; // The row height is controlled to 18mm for the photograph.
+      if (data.section === 'body' && data.column.index === IMG_COL && images[data.row.index]) {
+        data.cell.styles.minCellHeight = IMG_SIZE + 4;
+      }
+    },
+    // The photo is drawn in the center of the cell.
+    didDrawCell: (data) => {
+      if (data.section === 'body' && data.column.index === IMG_COL) {
+        const img = images[data.row.index];
+        if (!img) return;
+        try {
+          const x = data.cell.x + (data.cell.width - IMG_SIZE) / 2;
+          const y = data.cell.y + (data.cell.height - IMG_SIZE) / 2;
+          doc.addImage(img, 'JPEG', x, y, IMG_SIZE, IMG_SIZE);
+        } catch (err) {
+          console.error('PDF image draw error:', err);
         }
       }
     },
-    didDrawCell: (data) => {
-      // Draws the photo centered within the cell.
-      if (data.section === 'body' && data.column.index === 4) {
-        const cellValue: any = data.row.raw[4];
-        if (cellValue && cellValue.image) {
-          try {
-            const xCoord = data.cell.x + (data.cell.width - 14) / 2;
-            const yCoord = data.cell.y + (data.cell.height - 14) / 2;
-            doc.addImage(
-              cellValue.image,
-              'JPEG',
-              xCoord,
-              yCoord,
-              14,
-              14
-            );
-          } catch (err) {
-            console.error('PDF image draw error:', err);
-          }
-        }
-      }
-    }
   });
 
-  doc.save(`EHS_Audit_Reports_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`EHS_Audit_Reports_${today()}.pdf`);
 };

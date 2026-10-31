@@ -1,16 +1,16 @@
 'use client';
 
 import React from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { 
-  ShieldCheck, 
-  ArrowLeft, 
-  Award, 
-  TrendingUp, 
-  CheckCircle2, 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  ShieldCheck,
+  ArrowLeft,
+  CheckCircle2,
   AlertCircle,
   User,
-  FileText
+  FileText,
+  Inbox,
 } from 'lucide-react';
 
 interface ChecklistItem {
@@ -40,9 +40,9 @@ const sectionsData: Record<string, SectionDetail> = {
       { id: 3, description: 'Insufficient number of toilets in ratio', allocated: 10, actual: 10, adjustable: 10 },
       { id: 4, description: 'Condition monitoring system available for fire pump system', allocated: 5, actual: 5, adjustable: 5 },
       { id: 5, description: 'Contractors use suitable PPEs depending on nature of work', allocated: 15, actual: 15, adjustable: 15 },
-    ]
+    ],
   },
-  'admin': {
+  admin: {
     name: 'Admin',
     responsible: 'Dalton',
     category: 'Factory Premises / Guard Room / Canteen',
@@ -51,7 +51,7 @@ const sectionsData: Record<string, SectionDetail> = {
       { id: 2, description: 'All food handling areas free of pests/animals and maintaining hygiene', allocated: 5, actual: 5, adjustable: 5 },
       { id: 3, description: 'Kitchen is designed to prevent cross-contamination', allocated: 15, actual: 0, adjustable: 0, remark: 'Corrective action not taken as per PHI record' },
       { id: 4, description: 'Covered bins available in toilets', allocated: 10, actual: 10, adjustable: 10 },
-    ]
+    ],
   },
   'rm-stores': {
     name: 'RM Stores',
@@ -61,42 +61,53 @@ const sectionsData: Record<string, SectionDetail> = {
       { id: 1, description: 'Emergency Exit doors are not closed', allocated: 20, actual: 20, adjustable: 20 },
       { id: 2, description: 'Emergency exits pathways are not obstructed', allocated: 10, actual: 0, adjustable: 10, remark: 'Obstruction found near adhesive room' },
       { id: 3, description: 'Smoke detectors & Fire fighting equipment not obstructed', allocated: 10, actual: 10, adjustable: 10 },
-    ]
+    ],
   },
 };
 
 export default function SectionDetailPage() {
-  const router = useRouter();
   const params = useParams();
-  const slug = params?.slug as string;
+  const slug = (params?.slug as string) || '';
 
-  const section = sectionsData[slug] || {
-    name: slug ? slug.replace(/-/g, ' ').toUpperCase() : 'Section Detail',
-    responsible: 'Assigned Officer',
-    category: 'Operational Audit Area',
-    items: [
-      { id: 1, description: 'Emergency Response & Safety Compliance Check', allocated: 50, actual: 40, adjustable: 45 },
-      { id: 2, description: 'First Aid Box Accessibility and Inventory Maintenance', allocated: 30, actual: 30, adjustable: 30 },
-      { id: 3, description: 'Electrical Panel & Machine Safety Standards', allocated: 40, actual: 25, adjustable: 35, remark: 'Needs minor adjustments' }
-    ]
-  };
+  const section = sectionsData[slug];
+
+  const BackButton = (
+    <Link
+      href="/sections"
+      className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition"
+    >
+      <ArrowLeft className="w-4 h-4 text-slate-500" />
+      <span>Back to Sections</span>
+    </Link>
+  );
+
+  // Fake marks are not displayed for sections that lack checklist data.
+  if (!section) {
+    const title = slug ? slug.replace(/-/g, ' ').toUpperCase() : 'Section Detail';
+    return (
+      <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6">
+        <div className="border-b border-slate-200 pb-4">{BackButton}</div>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <Inbox className="mx-auto h-10 w-10 text-slate-400" />
+          <h1 className="mt-3 text-xl font-bold text-slate-800">{title}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            No checklist data has been recorded for this section yet.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const totalAllocated = section.items.reduce((acc, item) => acc + item.allocated, 0);
   const totalActual = section.items.reduce((acc, item) => acc + item.actual, 0);
   const totalAdjustable = section.items.reduce((acc, item) => acc + item.adjustable, 0);
-  const scorePct = Math.round((totalActual / totalAllocated) * 100) || 0;
+  const scorePct = totalAllocated > 0 ? Math.round((totalActual / totalAllocated) * 100) : 0;
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6">
       {/* Back Button & Header Navigation */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-        <button 
-          onClick={() => router.back()}
-          className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition"
-        >
-          <ArrowLeft className="w-4 h-4 text-slate-500" />
-          <span>Back to Sections</span>
-        </button>
+        {BackButton}
 
         <div className="text-right">
           <span className="text-xs uppercase tracking-wider text-red-600 font-semibold">{section.category}</span>
@@ -107,39 +118,40 @@ export default function SectionDetailPage() {
         </div>
       </div>
 
-      {/* Section Title & Summary KPI Cards Bar */}
+      {/* Section Title & Summary */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div>
           <div className="flex items-center gap-2 text-red-600 text-xs font-semibold uppercase tracking-wider mb-1">
             <ShieldCheck className="w-4 h-4" />
             <span>Detailed Audit Checklist</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-            {section.name}
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{section.name}</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">
             Inspecting health, safety & environmental evaluation criteria and compliance findings.
           </p>
         </div>
 
-        {/* Metric Summary Boxes */}
-        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 shrink-0">
+        <div className="grid grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 shrink-0">
           <div className="text-center px-3">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Allocated</span>
             <span className="text-lg sm:text-xl font-extrabold font-mono text-slate-900">{totalAllocated}</span>
           </div>
-          <div className="text-center px-3 border-x border-slate-200">
+          <div className="text-center px-3 border-l border-slate-200">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Actual</span>
             <span className="text-lg sm:text-xl font-extrabold font-mono text-amber-600">{totalActual}</span>
           </div>
-          <div className="text-center px-3">
+          <div className="text-center px-3 border-l border-slate-200">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Adjustable</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-indigo-600">{totalAdjustable}</span>
+          </div>
+          <div className="text-center px-3 border-l border-slate-200">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Score %</span>
             <span className="text-lg sm:text-xl font-extrabold font-mono text-emerald-600">{scorePct}%</span>
           </div>
         </div>
       </div>
 
-      {/* Checklist Table Container */}
+      {/* Checklist Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2">
