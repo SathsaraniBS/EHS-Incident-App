@@ -20,6 +20,11 @@ from app.core.database import Base, engine, get_db
 # Import Section and AuditChecklist models for the dashboard
 from app.models.incident import Section, AuditChecklist
 
+from app.models.user import User  # noqa: F401
+
+# NEW: JWT login router
+from app.routers.auth import router as auth_router
+
 # ------------------------------------------------------------------------------
 # 1. SQLAlchemy Model
 # ------------------------------------------------------------------------------
@@ -57,6 +62,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# NEW: /api/v1/auth/login, /api/v1/auth/me
+app.include_router(auth_router)
+
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -87,7 +95,7 @@ def send_high_severity_alert(incident_id: int, section: str, location: str, desc
         SMTP_SERVER = "smtp.gmail.com"
         SMTP_PORT = 587
         SENDER_EMAIL = "s209bandara@gmail.com"
-        SENDER_PASSWORD = "your-app-password"  # ඔබගේ Gmail App Password එක මෙහි යොදන්න
+        SENDER_PASSWORD = "your-app-password"  # your Gmail App Password put here (not your regular Gmail password)
         RECEIVER_EMAIL = "s209bandara@gmail.com"
 
         msg = MIMEMultipart()
@@ -149,7 +157,7 @@ async def create_incident(
     location: str = Form(...),
     description: str = Form(...),
     severity: str = Form("Medium"),
-    assigned_to: Optional[str] = Form(None), # Mobile Form එකෙන් එන Responsible Person
+    assigned_to: Optional[str] = Form(None), # Mobile Form Responsible Person
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
