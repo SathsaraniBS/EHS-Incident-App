@@ -1,15 +1,19 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Lato } from 'next/font/google';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Lock, Mail, ArrowRight, UserCheck } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { homeForRole, setSession, type Session } from '@/lib/auth';
+
+const lato = Lato({ subsets: ['latin'], weight: ['300', '400', '700'] });
 
 // ⚠️ DEMO ONLY: In production, replace these with a backend API, hashed passwords, and an httpOnly JWT cookie.
 const DEMO_USERS: Record<string, { password: string; session: Session }> = {
   'admin@bondville.lk': {
     password: 'Admin@2026',
-    session: { email: 'admin@bondville.lk', role: 'admin', name: 'BSS (Turnaround Coordinator)' },
+    session: { email: 'admin@bondville.lk', role: 'admin', name: 'BSS' },
   },
   'client@bondville.lk': {
     password: 'Client@2026',
@@ -17,10 +21,14 @@ const DEMO_USERS: Record<string, { password: string; session: Session }> = {
   },
 };
 
+const SHOW_DEMO = process.env.NODE_ENV !== 'production';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -52,120 +60,127 @@ export default function LoginPage() {
         setSession(user.session);
         router.replace(homeForRole(user.session.role));
       } else {
-        setError('Invalid credentials. Please use the quick fill buttons below.');
+        setError('Email or password is incorrect. Check your details and try again.');
         setIsLoading(false);
       }
     }, 600);
   };
 
+  const inputClass =
+    'w-full h-11 rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder-neutral-400 transition focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10';
+
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center p-4 sm:p-6 text-slate-100">
-      {/* Brand Header */}
-      <div className="mb-8 text-center space-y-2">
-        <div className="inline-flex w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-2xl items-center justify-center shadow-xl">
-          <ShieldAlert className="w-6 h-6 text-red-600" />
-        </div>
-        <h1 className="text-2xl font-extrabold tracking-wider text-white">BONDVILLE</h1>
-        <p className="text-xs uppercase tracking-widest text-red-500 font-semibold">
-          EHS Incident & Audit Portal
-        </p>
-      </div>
-
-      {/* Login Card */}
-      <div className="w-full max-w-md bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-white">Secure Sign In</h2>
-          <p className="text-xs text-zinc-400 mt-1">
-            Enter your corporate credentials to access the dashboard.
-          </p>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400">
-            {error}
+    <div
+      className={`${lato.className} min-h-screen flex flex-col items-center justify-between bg-gradient-to-br from-neutral-50 via-white to-red-50 px-4 py-10`}
+    >
+      <div className="flex-1 w-full flex flex-col items-center justify-center">
+        {/* Login card */}
+        <div className="w-full max-w-[360px] sm:max-w-[400px] rounded-2xl bg-white px-8 py-10 sm:px-12 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)]">
+          {/* Logo: reduced gap below (was mb-4). Adjust mb-0 / -mb-2 to fine-tune. */}
+          <div className="flex justify-center mb-0">
+            <img src="/images/logo.png" alt="Bondville logo" className="h-20 w-auto object-contain" />
           </div>
-        )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Corporate Email
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <h1 className="text-center text-2xl font-bold text-neutral-900 -mt-4">Log in</h1>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-xs text-red-800"
+            >
+              <AlertCircle className="w-4 h-4 mt-px shrink-0" aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-xs font-bold text-neutral-800 mb-1.5">
+                Email
+              </label>
               <input
+                id="email"
+                name="email"
                 type="email"
+                autoComplete="username"
                 required
                 placeholder="name@bondville.lk"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-zinc-600 focus:outline-none focus:border-red-600 transition"
+                className={inputClass}
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-zinc-600 focus:outline-none focus:border-red-600 transition"
-              />
+            <div>
+              <label htmlFor="password" className="block text-xs font-bold text-neutral-800 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${inputClass} pr-11`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-neutral-400 hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 transition"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full mt-2 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-70 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-red-950 flex items-center justify-center gap-2 group"
-          >
-            {isLoading ? (
-              <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>Sign In to Dashboard</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </button>
-        </form>
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-neutral-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-neutral-300 accent-red-600"
+                />
+                Remember me
+              </label>
+              <Link
+                href="/forgot-password"
+                className="font-bold text-neutral-800 hover:text-red-600 focus:outline-none focus-visible:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
-        {/* Quick Testing Credentials (Demo only – remove in production) */}
-        <div className="mt-8 pt-6 border-t border-zinc-800/80 space-y-3">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block text-center">
-            Quick Test Credentials (Click to Fill)
-          </span>
-          <div className="grid grid-cols-2 gap-2">
             <button
-              type="button"
-              onClick={() => fillCredentials('admin')}
-              className="px-3 py-2.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs text-zinc-300 font-medium transition flex items-center justify-center gap-1.5"
+              type="submit"
+              disabled={isLoading}
+              className="mt-2 w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-red-600 text-sm font-bold text-white shadow-lg shadow-red-600/30 transition hover:bg-red-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-600/30 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <UserCheck className="w-3.5 h-3.5 text-red-500" />
-              <span>Fill Admin</span>
+              {isLoading ? (
+                <>
+                  <span
+                    className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
+                  <span>Logging in…</span>
+                </>
+              ) : (
+                'Login'
+              )}
             </button>
-            <button
-              type="button"
-              onClick={() => fillCredentials('client')}
-              className="px-3 py-2.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs text-zinc-300 font-medium transition flex items-center justify-center gap-1.5"
-            >
-              <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-              <span>Fill Client</span>
-            </button>
-          </div>
+          </form>
         </div>
       </div>
 
-      <div className="mt-8 text-center text-xs text-zinc-600">
+      <footer className="mt-10 text-center text-xs font-light text-neutral-500">
         © 2026 Bondville (Pvt) Ltd. All rights reserved.
-      </div>
+      </footer>
     </div>
   );
 }
