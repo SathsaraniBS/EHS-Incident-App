@@ -1,27 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Lato } from 'next/font/google';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { homeForRole, setSession, type Session } from '@/lib/auth';
+import { homeForRole, type Role } from '@/lib/auth';
 
 const lato = Lato({ subsets: ['latin'], weight: ['300', '400', '700'] });
-
-// ⚠️ DEMO ONLY: In production, replace these with a backend API, hashed passwords, and an httpOnly JWT cookie.
-const DEMO_USERS: Record<string, { password: string; session: Session }> = {
-  'admin@bondville.lk': {
-    password: 'Admin@2026',
-    session: { email: 'admin@bondville.lk', role: 'admin', name: 'BSS' },
-  },
-  'client@bondville.lk': {
-    password: 'Client@2026',
-    session: { email: 'client@bondville.lk', role: 'client', name: 'Client Auditor' },
-  },
-};
-
-const SHOW_DEMO = process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,33 +22,34 @@ export default function LoginPage() {
     localStorage.removeItem('bondville_user');
   }, []);
 
-  const fillCredentials = (role: 'admin' | 'client') => {
-    if (role === 'admin') {
-      setEmail('admin@bondville.lk');
-      setPassword('Admin@2026');
-    } else {
-      setEmail('client@bondville.lk');
-      setPassword('Client@2026');
-    }
-    setError('');
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const user = DEMO_USERS[email.trim().toLowerCase()];
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password, remember }),
+      });
 
-      if (user && user.password === password) {
-        setSession(user.session);
-        router.replace(homeForRole(user.session.role));
-      } else {
-        setError('Email or password is incorrect. Check your details and try again.');
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.detail || 'Login failed. Please try again.');
         setIsLoading(false);
+        return;
       }
-    }, 600);
+
+      const role = data.user?.role as Role;
+      router.replace(homeForRole(role));
+      router.refresh();
+    } catch {
+      setError('Network error. Check your connection and try again.');
+      setIsLoading(false);
+    }
   };
 
   const inputClass =
@@ -78,6 +64,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[360px] sm:max-w-[400px] rounded-2xl bg-white px-8 py-10 sm:px-12 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)]">
           {/* Logo: reduced gap below (was mb-4). Adjust mb-0 / -mb-2 to fine-tune. */}
           <div className="flex justify-center mb-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/images/logo.png" alt="Bondville logo" className="h-20 w-auto object-contain" />
           </div>
 
@@ -149,12 +136,7 @@ export default function LoginPage() {
                 />
                 Remember me
               </label>
-              <Link
-                href="/forgot-password"
-                className="font-bold text-neutral-800 hover:text-red-600 focus:outline-none focus-visible:underline"
-              >
-                Forgot password?
-              </Link>
+              <span className="font-bold text-neutral-800">Forgot password? Contact admin.</span>
             </div>
 
             <button

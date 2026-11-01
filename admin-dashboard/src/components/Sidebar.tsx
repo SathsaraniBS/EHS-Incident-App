@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { FileText, BarChart2, ShieldAlert, Award, LogOut, type LucideIcon } from 'lucide-react';
-import { clearSession, getSession, type Role, type Session } from '@/lib/auth';
+import type { Role, SessionUser } from '@/lib/auth';
 
 interface NavItem {
   href: string;
@@ -23,19 +23,32 @@ const NAV_ITEMS: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [session, setSessionState] = useState<Session | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
-  // The cookie is read only on the client side (to prevent hydration mismatch).
   useEffect(() => {
-    setSessionState(getSession());
+    let cancelled = false;
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled) setUser(data);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const visibleItems = session ? NAV_ITEMS.filter((n) => n.roles.includes(session.role)) : [];
+  const visibleItems = user ? NAV_ITEMS.filter((n) => n.roles.includes(user.role)) : [];
 
-  const handleSignOut = () => {
-    clearSession();
-    router.replace('/login');
-    router.refresh();
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.replace('/login');
+      router.refresh();
+    }
   };
 
   return (
@@ -71,7 +84,6 @@ export default function Sidebar() {
 
       {/* ===== Desktop sidebar ===== */}
       <aside className="hidden md:flex md:sticky md:top-0 md:h-screen w-64 shrink-0 flex-col bg-zinc-950 text-white p-6 shadow-2xl border-r border-zinc-900">
-        {/* Brand / Logo */}
         <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-zinc-900">
           <div className="w-9 h-9 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center shadow-inner">
             <ShieldAlert className="w-5 h-5 text-red-600" />
@@ -84,7 +96,6 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation Links */}
         <nav className="space-y-2 flex-1">
           {visibleItems.map(({ href, label, icon: Icon, isActive }) => {
             const active = isActive(pathname);
@@ -105,16 +116,11 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* User Session Info + Sign out */}
         <div className="pt-4 border-t border-zinc-900 text-xs text-zinc-500 space-y-3">
           <div>
             <p className="uppercase tracking-wider text-[10px]">Logged in as:</p>
-            <p className="text-zinc-200 font-semibold mt-0.5 tracking-wide">
-              {session?.name ?? '—'}
-            </p>
-            {session && (
-              <p className="text-[10px] uppercase tracking-wider text-red-500 mt-0.5">{session.role}</p>
-            )}
+            <p className="text-zinc-200 font-semibold mt-0.5 tracking-wide">{user?.full_name ?? '—'}</p>
+            {user && <p className="text-[10px] uppercase tracking-wider text-red-500 mt-0.5">{user.role}</p>}
           </div>
           <button
             onClick={handleSignOut}
