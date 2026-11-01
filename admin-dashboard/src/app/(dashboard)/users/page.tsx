@@ -10,6 +10,8 @@ import {
   EyeOff,
   Wand2,
   KeyRound,
+  Pencil,
+  Trash2,
   X,
   CheckCircle2,
 } from 'lucide-react';
@@ -32,6 +34,7 @@ function generatePassword(length = 12): string {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [meId, setMeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -46,11 +49,23 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Edit modal
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editing, setEditing] = useState(false);
+
   // Reset-password modal
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetPw, setResetPw] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetting, setResetting] = useState(false);
+
+  // Delete modal
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -73,6 +88,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     loadUsers();
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => setMeId(me?.id ?? null))
+      .catch(() => setMeId(null));
   }, [loadUsers]);
 
   const openAdd = () => {
@@ -144,6 +163,30 @@ export default function UsersPage() {
     }
   };
 
+  const openEdit = (u: UserRow) => {
+    setEditTarget(u);
+    setEditName(u.full_name);
+    setEditEmail(u.email);
+    setEditError('');
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget || editing) return;
+    setEditing(true);
+    setEditError('');
+    try {
+      const updated = await patchUser(editTarget.id, { full_name: editName, email: editEmail });
+      setUsers((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+      setNotice(`User #${updated.id} updated.`);
+      setEditTarget(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Update failed.');
+    } finally {
+      setEditing(false);
+    }
+  };
+
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetTarget || resetting) return;
@@ -161,8 +204,32 @@ export default function UsersPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch(`/api/users/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.detail || 'Delete failed.');
+        return;
+      }
+      setUsers((prev) => prev.filter((x) => x.id !== deleteTarget.id));
+      setNotice(`User ${deleteTarget.email} deleted.`);
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError('Network error. Try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const inputClass =
     'w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20';
+
+  const smallBtn =
+    'flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition';
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-4 lg:p-8 space-y-6">
@@ -235,58 +302,79 @@ export default function UsersPage() {
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/80 transition">
-                  <td className="px-4 py-3.5 font-mono font-bold text-red-600">#{u.id}</td>
-                  <td className="px-4 py-3.5 font-semibold text-slate-900">{u.full_name}</td>
-                  <td className="px-4 py-3.5 text-slate-700">{u.email}</td>
-                  <td className="px-4 py-3.5">
-                    <select
-                      value={u.role}
-                      onChange={(e) => changeRole(u, e.target.value as Role)}
-                      className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold focus:outline-none"
-                    >
-                      <option value="admin">admin</option>
-                      <option value="client">client</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span
-                      className={`rounded-md border px-2.5 py-1 text-xs font-bold ${
-                        u.is_active
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
-                      }`}
-                    >
-                      {u.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => {
-                          setResetTarget(u);
-                          setResetPw('');
-                          setResetError('');
-                        }}
-                        className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition"
+              users.map((u) => {
+                const isMe = u.id === meId;
+                return (
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                    <td className="px-4 py-3.5 font-mono font-bold text-red-600">#{u.id}</td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-900">
+                      {u.full_name}
+                      {isMe && <span className="ml-2 text-[10px] font-bold uppercase text-slate-400">(you)</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-700">{u.email}</td>
+                    <td className="px-4 py-3.5">
+                      <select
+                        value={u.role}
+                        onChange={(e) => changeRole(u, e.target.value as Role)}
+                        disabled={isMe}
+                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold focus:outline-none disabled:opacity-60"
                       >
-                        <KeyRound className="h-3.5 w-3.5 text-red-600" /> Reset password
-                      </button>
-                      <button
-                        onClick={() => toggleActive(u)}
-                        className={`rounded-md border px-2 py-1 text-xs font-medium transition ${
+                        <option value="admin">admin</option>
+                        <option value="client">client</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`rounded-md border px-2.5 py-1 text-xs font-bold ${
                           u.is_active
-                            ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-100 text-slate-500 border-slate-200'
                         }`}
                       >
-                        {u.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        {u.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button onClick={() => openEdit(u)} className={smallBtn}>
+                          <Pencil className="h-3.5 w-3.5 text-red-600" /> Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setResetTarget(u);
+                            setResetPw('');
+                            setResetError('');
+                          }}
+                          className={smallBtn}
+                        >
+                          <KeyRound className="h-3.5 w-3.5 text-red-600" /> Reset password
+                        </button>
+                        <button
+                          onClick={() => toggleActive(u)}
+                          disabled={isMe}
+                          className={`rounded-md border px-2 py-1 text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                            u.is_active
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          }`}
+                        >
+                          {u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeleteTarget(u);
+                            setDeleteError('');
+                          }}
+                          disabled={isMe}
+                          className="flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -411,6 +499,71 @@ export default function UsersPage() {
         </div>
       )}
 
+      {/* Edit modal */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Edit User #{editTarget.id}</h2>
+              <button onClick={() => setEditTarget(null)} aria-label="Close">
+                <X className="h-5 w-5 text-slate-400 hover:text-slate-700" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleEdit} className="space-y-3" autoComplete="off">
+              <div>
+                <label htmlFor="e-name" className="block text-xs font-bold text-slate-700 mb-1">
+                  Full name
+                </label>
+                <input
+                  id="e-name"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="e-email" className="block text-xs font-bold text-slate-700 mb-1">
+                  Email (used to log in)
+                </label>
+                <input
+                  id="e-email"
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditTarget(null)}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {editing ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Reset password modal */}
       {resetTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm">
@@ -466,6 +619,47 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-2 mb-2 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+              <h2 className="text-lg font-bold text-slate-900">Delete user?</h2>
+            </div>
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold text-slate-900">{deleteTarget.full_name}</span> ({deleteTarget.email}) will be
+              permanently removed and can no longer log in. This cannot be undone.
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Tip: if you only want to block access for now, use <b>Deactivate</b> instead.
+            </p>
+
+            {deleteError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
