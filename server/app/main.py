@@ -25,6 +25,8 @@ from app.models.user import User  # noqa: F401
 # NEW: JWT login router
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router  
+from app.routers.compliance import router as compliance_router   
+from app.models.compliance import Audit, NCReport            
 # ------------------------------------------------------------------------------
 # 1. SQLAlchemy Model
 # ------------------------------------------------------------------------------
@@ -65,6 +67,7 @@ app.add_middleware(
 # NEW: /api/v1/auth/login, /api/v1/auth/me
 app.include_router(auth_router)
 app.include_router(users_router)   
+app.include_router(compliance_router)   
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
