@@ -3,7 +3,18 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FileText, BarChart2, ShieldAlert, Award, Users, LogOut, type LucideIcon } from 'lucide-react';
+import {
+  FileText,
+  BarChart2,
+  ShieldAlert,
+  Award,
+  Users,
+  ShieldCheck,
+  ClipboardList,
+  FileWarning,
+  LogOut,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Role, SessionUser } from '@/lib/auth';
 
 interface NavItem {
@@ -18,6 +29,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Incidents Portal', icon: FileText, roles: ['admin'], isActive: (p) => p === '/' },
   { href: '/sections', label: 'Sections Audit', icon: BarChart2, roles: ['admin', 'client'], isActive: (p) => p.startsWith('/sections') },
   { href: '/hse-scorecard', label: 'HSE Scorecard', icon: Award, roles: ['admin'], isActive: (p) => p === '/hse-scorecard' },
+  { href: '/compliance', label: 'Compliance', icon: ShieldCheck, roles: ['admin'], isActive: (p) => p === '/compliance' },
+  { href: '/compliance/audits', label: 'Audit Register', icon: ClipboardList, roles: ['admin'], isActive: (p) => p.startsWith('/compliance/audits') },
+  { href: '/compliance/nc', label: 'NC Tracker', icon: FileWarning, roles: ['admin'], isActive: (p) => p.startsWith('/compliance/nc') },
   { href: '/users', label: 'User Management', icon: Users, roles: ['admin'], isActive: (p) => p.startsWith('/users') },
 ];
 
@@ -97,7 +111,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        <nav className="space-y-2 flex-1">
+        <nav className="space-y-2 flex-1 overflow-y-auto">
           {visibleItems.map(({ href, label, icon: Icon, isActive }) => {
             const active = isActive(pathname);
             return (
