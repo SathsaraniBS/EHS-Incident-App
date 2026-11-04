@@ -1,22 +1,33 @@
-# Python Virtual Environments & Caches
-server/venv/
-server/__pycache__/
+# Python
+venv/
+.venv/
+__pycache__/
 *.pyc
+.pytest_cache/
 
-# Environment Files & Passwords
+# Environment & secrets
 .env
-.env.local
+.env.*
+!.env.example
 
-# Node.js Modules & Builds
+# Node / builds
 node_modules/
-admin-dashboard/node_modules/
-client/node_modules/
 .next/
-admin-dashboard/.next/
 client/.expo/
 client/dist/
 
-# System & IDE Files
+# User uploads & real data (never commit)
+server/uploads/
+*.xlsx
+*.xls
+*.csv
+
+# Logs & local DBs
+*.log
+*.db
+*.sqlite3
+
+# OS / IDE
 .DS_Store
 Thumbs.db
 .vscode/
