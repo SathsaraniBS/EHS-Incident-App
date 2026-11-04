@@ -1,6 +1,6 @@
 # server/seed_compliance.py
 # Dev-only demo data. Run:  python seed_compliance.py          (add)
-#                           python seed_compliance.py --reset  (remove seeded rows)
+# python seed_compliance.py --reset  (remove seeded rows)
 import os
 import sys
 from datetime import date, timedelta
