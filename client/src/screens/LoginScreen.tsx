@@ -1,4 +1,3 @@
-// D:\ehs-incident-app\client\src\screens\LoginScreen.tsx
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -9,7 +8,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { login } from '../api/incidentApi';
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
@@ -18,19 +19,27 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // Field Validation
-    if (!email || !password) {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
       Alert.alert('Error', 'Please enter both email and password!');
       return;
     }
-
-    if (email.trim() && password.trim()) {
-      Alert.alert('Success', 'Login successful!');
+    setLoading(true);
+    try {
+      await login(email.trim(), password);
       onLoginSuccess();
-    } else {
-      Alert.alert('Error', 'Invalid credentials!');
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      const message = !e?.response
+        ? 'Cannot reach the server. Check your Wi-Fi and try again.'
+        : typeof detail === 'string'
+        ? detail
+        : 'Login failed. Please try again.';
+      Alert.alert('Login failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,6 +61,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
           />
         </View>
@@ -68,8 +78,16 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           />
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Login</Text>
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -96,28 +114,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 6,
-  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1e293b', textAlign: 'center', marginBottom: 6 },
+  subtitle: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 24 },
+  inputContainer: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -127,16 +127,7 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     backgroundColor: '#f8fafc',
   },
-  button: {
-    backgroundColor: '#0f172a',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  button: { backgroundColor: '#0f172a', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  buttonDisabled: { backgroundColor: '#94a3b8' },
+  buttonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
 });
