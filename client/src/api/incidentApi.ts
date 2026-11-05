@@ -111,11 +111,15 @@ api.interceptors.response.use(
 
 export const login = async (email: string, password: string) => {
   await getWorkingBaseUrl();
-  // CHECK: endpoint, request body and response field match your auth.py
-  const res = await api.post('/api/v1/auth/login', { email, password });
+  const res = await api.post('/api/v1/auth/login', {
+    email,
+    password,
+    remember_me: true, 
+  });
   const token: string | undefined = res.data?.access_token;
   if (!token) throw new Error('No token returned by server');
   await saveToken(token);
+  return res.data.user as { id: number; email: string; full_name: string; role: string };
 };
 
 export const checkServerHealth = async () => {
