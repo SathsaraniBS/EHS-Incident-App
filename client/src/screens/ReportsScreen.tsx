@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { getIncidents, API_BASE_URL } from '../api/incidentApi';
+import { theme, severityColor } from '../theme';
 
 interface Incident {
   id: number;
@@ -19,6 +20,9 @@ interface Incident {
   location: string;
   image_url: string | null;
   created_at?: string;
+  severity?: string;
+  status?: string;
+  assigned_to?: string | null;
 }
 
 export function ReportsScreen() {
@@ -31,17 +35,12 @@ export function ReportsScreen() {
     try {
       setErrorMsg(null);
       const data = await getIncidents();
-      
-      const rawList = Array.isArray(data) ? data : (data?.incidents || data?.data || []);
-      
-      if (Array.isArray(rawList)) {
-        setIncidents([...rawList].reverse());
-      } else {
-        setIncidents([]);
-      }
+      const rawList = Array.isArray(data) ? data : data?.incidents || data?.data || [];
+      // the server already returns newest first, so no reverse() here
+      setIncidents(Array.isArray(rawList) ? rawList : []);
     } catch (error: any) {
-      console.error("Fetch incidents error:", error);
-      setErrorMsg("Failed to load reports. Pull down to refresh.");
+      console.error('Fetch incidents error:', error);
+      setErrorMsg('Failed to load reports. Pull down to refresh.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,32 +59,44 @@ export function ReportsScreen() {
   };
 
   const renderIncidentCard = ({ item }: { item: Incident }) => {
-    const imageUrl = item.image_url 
-      ? (item.image_url.startsWith('http') ? item.image_url : `${API_BASE_URL}${item.image_url}`)
+    const imageUrl = item.image_url
+      ? item.image_url.startsWith('http')
+        ? item.image_url
+        : `${API_BASE_URL}${item.image_url}`
       : null;
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardSection}>{item.section || 'General'}</Text>
+          <Text style={styles.cardSection} numberOfLines={2}>
+            {item.section || 'General'}
+          </Text>
           <Text style={styles.cardId}>#{item.id}</Text>
         </View>
 
-        <Text style={styles.cardLocation}>📍 Location: {item.location || 'N/A'}</Text>
+        <View style={styles.badgeRow}>
+          {item.severity ? (
+            <View style={[styles.badge, { backgroundColor: severityColor(item.severity) }]}>
+              <Text style={styles.badgeText}>{item.severity}</Text>
+            </View>
+          ) : null}
+          {item.status ? (
+            <View style={[styles.badge, styles.statusBadge]}>
+              <Text style={[styles.badgeText, { color: theme.textMuted }]}>{item.status}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <Text style={styles.cardLocation}>📍 {item.location || 'N/A'}</Text>
+        {item.assigned_to ? <Text style={styles.cardMeta}>👤 {item.assigned_to}</Text> : null}
         <Text style={styles.cardDescription}>{item.description}</Text>
 
         {imageUrl && (
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: imageUrl }} style={styles.cardImage} resizeMode="cover" />
         )}
 
         {item.created_at && (
-          <Text style={styles.cardDate}>
-            🕒 {new Date(item.created_at).toLocaleString()}
-          </Text>
+          <Text style={styles.cardDate}>🕒 {new Date(item.created_at).toLocaleString()}</Text>
         )}
       </View>
     );
@@ -95,12 +106,12 @@ export function ReportsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
         <Text style={styles.header}>Submitted Reports</Text>
-        <Text style={styles.subHeader}>Total Reports: {incidents.length}</Text>
+        <Text style={styles.subHeader}>Total reports: {incidents.length}</Text>
 
         {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
         {loading ? (
-          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={theme.red} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={incidents}
@@ -113,7 +124,12 @@ export function ReportsScreen() {
               </View>
             }
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.red]}
+                tintColor={theme.red}
+              />
             }
           />
         )}
@@ -123,27 +139,38 @@ export function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f8fafc' },
+  safeArea: { flex: 1, backgroundColor: theme.bg },
   container: { padding: 16, flex: 1 },
-  header: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
-  subHeader: { fontSize: 13, color: '#64748b', marginBottom: 12 },
-  errorText: { color: '#dc2626', fontSize: 13, marginBottom: 10 },
+  header: { fontSize: 24, fontWeight: '800', color: theme.text },
+  subHeader: { fontSize: 13, color: theme.textMuted, marginTop: 2, marginBottom: 12 },
+  errorText: { color: theme.high, fontSize: 13, marginBottom: 10 },
+
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: theme.card,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  cardSection: { fontSize: 14, fontWeight: 'bold', color: '#1e293b', flex: 1 },
-  cardId: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
-  cardLocation: { fontSize: 13, color: '#0284c7', fontWeight: '600', marginBottom: 6 },
-  cardDescription: { fontSize: 14, color: '#334155', marginBottom: 10 },
-  cardImage: { width: '100%', height: 180, borderRadius: 8, marginBottom: 10 },
-  cardDate: { fontSize: 11, color: '#94a3b8', textAlign: 'right' },
+  cardSection: { fontSize: 15, fontWeight: '700', color: theme.text, flex: 1, paddingRight: 8 },
+  cardId: { fontSize: 12, fontWeight: '700', color: theme.red },
+
+  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+  statusBadge: { backgroundColor: theme.chipBg },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
+
+  cardLocation: { fontSize: 13, color: theme.textMuted, fontWeight: '600', marginBottom: 2 },
+  cardMeta: { fontSize: 13, color: theme.textMuted, marginBottom: 2 },
+  cardDescription: { fontSize: 14, color: theme.text, marginTop: 6, marginBottom: 10 },
+  cardImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 10 },
+  cardDate: { fontSize: 11, color: theme.textFaint, textAlign: 'right' },
+
   emptyContainer: { alignItems: 'center', marginTop: 50 },
-  emptyText: { color: '#64748b', fontSize: 15 },
+  emptyText: { color: theme.textMuted, fontSize: 15 },
 });
