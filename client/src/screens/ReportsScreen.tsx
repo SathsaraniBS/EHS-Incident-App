@@ -12,18 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { getIncidents, API_BASE_URL } from '../api/incidentApi';
 import { theme, severityColor } from '../theme';
+import { IncidentCard } from '../components/IncidentCard';
+import { Incident } from '../types/incident';
 
-interface Incident {
-  id: number;
-  section: string;
-  description: string;
-  location: string;
-  image_url: string | null;
-  created_at?: string;
-  severity?: string;
-  status?: string;
-  assigned_to?: string | null;
-}
+
 
 export function ReportsScreen() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -116,7 +108,7 @@ export function ReportsScreen() {
           <FlatList
             data={incidents}
             keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString())}
-            renderItem={renderIncidentCard}
+            renderItem={({ item }) => <IncidentCard item={item} />}
             contentContainerStyle={{ paddingBottom: 30 }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
