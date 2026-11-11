@@ -1,12 +1,9 @@
-"""Read-only Rating System API.
+"""Read-only Rating System API (admin only).
 
-Register it in app/main.py:
+Registered in app/main.py as:
 
-    from app.rating.router import router as rating_router
-    app.include_router(rating_router)
-
-NOTE: adjust the single `get_db` import below to match your project
-(open any existing router and copy how it gets the DB session).
+    from app.routers.ratings import router as ratings_router
+    app.include_router(ratings_router)
 """
 from typing import Dict, List, Optional
 
@@ -14,19 +11,16 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
-from app.database import SessionLocal
-from app.rating.models import HseCategory, RatingRule, SeverityLevel
+from app.core.database import get_db
+from app.models.rating import HseCategory, RatingRule, SeverityLevel
+from app.routers.auth import require_role
 
 
-def get_db():  # replace with: from app.database import get_db   (if you already have one)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-router = APIRouter(prefix="/rating", tags=["rating"])
+router = APIRouter(
+    prefix="/api/v1/rating",
+    tags=["Rating System"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 class SeverityOut(BaseModel):

@@ -27,6 +27,10 @@ from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router  
 from app.routers.compliance import router as compliance_router   
 from app.models.compliance import Audit, NCReport            
+from app.routers.ratings import router as ratings_router
+from app.routers.scorecard import router as scorecard_router
+from app.models.rating import SeverityLevel, HseCategory, RatingRule  # noqa: F401  (so create_all builds the tables)
+from app.models.scorecard import AuditCycle, SectionScore  # noqa: F401  (so create_all builds the tables)
 # ------------------------------------------------------------------------------
 # 1. SQLAlchemy Model
 # ------------------------------------------------------------------------------
@@ -68,6 +72,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(users_router)   
 app.include_router(compliance_router)   
+app.include_router(ratings_router)
+app.include_router(scorecard_router)
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
