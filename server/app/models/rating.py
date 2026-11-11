@@ -6,13 +6,11 @@ These three tables replace the "Rating System" sheet of the HSE audit workbook:
     hse_categories   -> the 14 HSE categories
     rating_rules     -> every non-conformance sentence, tied to one category + one severity
 
-NOTE: adjust the single import below if your project exposes Base elsewhere
-(look at how an existing model file imports it).
 """
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
-from app.database import Base
+from app.core.database import Base
 
 
 class SeverityLevel(Base):

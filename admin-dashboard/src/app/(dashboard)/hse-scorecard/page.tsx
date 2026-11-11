@@ -1,10 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Award, ArrowUpDown, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Award, ArrowUpDown, RefreshCw, ShieldCheck } from 'lucide-react';
 
-type SectionScore = {
+type ScoreRow = {
+  id: number;
   no: number;
+  section_id: number | null;
   section: string;
   responsible: string;
   allocated: number;
@@ -12,41 +15,64 @@ type SectionScore = {
   adjustable: number;
 };
 
+type ScorecardResponse = {
+  cycle: { id: number; label: string };
+  sections: ScoreRow[];
+};
+
 type Method = 'average' | 'weighted';
 type SortMode = 'default' | 'lowest' | 'highest';
 
-/**
- * DATA SOURCE (temporary)
- * Snapshot of the "Dashboard" sheet in the workbook
- * "November 1st & 2nd week health and Safety audit score.xlsx".
- * Only the three score columns are stored. Every percentage on this page is
- * calculated from them (the workbook's own % columns were typed by hand and
- * some of them are out of date).
- *
- * When the backend endpoint exists, replace SECTIONS with the API response
- * (same shape: no, section, responsible, allocated, actual, adjustable).
- */
-const PERIOD_LABEL = '1st & 2nd Week, November 2026';
+/* ---------------------------------------------------------------------------
+ * SETTINGS - check these three lines against how your other dashboard pages work
+ * ------------------------------------------------------------------------- */
 
-const SECTIONS: SectionScore[] = [
-  { no: 1, section: 'General Maintenance', responsible: 'Ruwandika', allocated: 465, actual: 305, adjustable: 350 },
-  { no: 2, section: 'Admin', responsible: 'Dalton', allocated: 275, actual: 205, adjustable: 255 },
-  { no: 3, section: 'RM Stores', responsible: 'Chandrasiri', allocated: 235, actual: 220, adjustable: 230 },
-  { no: 4, section: 'FG', responsible: 'Chandrasiri', allocated: 155, actual: 140, adjustable: 140 },
-  { no: 5, section: 'Accessories', responsible: 'Sampath', allocated: 230, actual: 145, adjustable: 185 },
-  { no: 6, section: 'Cutting', responsible: 'Chamila', allocated: 155, actual: 155, adjustable: 155 },
-  { no: 7, section: 'Ground floor modules & Molding', responsible: 'Gamini', allocated: 265, actual: 195, adjustable: 225 },
-  { no: 8, section: 'Packing', responsible: 'Gamini', allocated: 140, actual: 140, adjustable: 140 },
-  { no: 9, section: 'Audit room & Final Inspection', responsible: 'Lalinda', allocated: 95, actual: 95, adjustable: 95 },
-  { no: 10, section: 'Lab & CPI', responsible: 'Chandani', allocated: 130, actual: 120, adjustable: 130 },
-  { no: 11, section: 'Screen Printing & Modules', responsible: 'Gamini', allocated: 210, actual: 125, adjustable: 140 },
-  { no: 12, section: 'Sample Room', responsible: 'Samitha', allocated: 180, actual: 180, adjustable: 180 },
-  { no: 13, section: 'Coating', responsible: 'Chandani', allocated: 205, actual: 190, adjustable: 190 },
-  { no: 14, section: 'Forte', responsible: 'Cooray', allocated: 180, actual: 170, adjustable: 180 },
-  { no: 15, section: 'IE', responsible: 'Dilan', allocated: 220, actual: 130, adjustable: 150 },
-  { no: 16, section: 'Training School', responsible: 'Dilan', allocated: 130, actual: 130, adjustable: 130 },
-  { no: 17, section: 'Medical Centre', responsible: 'Nadee', allocated: 100, actual: 95, adjustable: 95 },
-];
+// Backend address. Use the same env variable your other pages use.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+// Where the login token is kept in the browser. Open any page that already calls
+// the API (for example the compliance page) and copy how it reads the token.
+const TOKEN_STORAGE_KEY = 'access_token';
+
+// Section name links to `${SECTION_PAGE_BASE}/${section_id}`.
+// Leave empty ('') until you know the Sections Audit page route, e.g. '/sections-audit'.
+const SECTION_PAGE_BASE = '';
+
+/* ------------------------------------------------------------------------- */
+
+class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function authHeaders(): HeadersInit {
+  try {
+    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchScorecard(signal: AbortSignal): Promise<ScorecardResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/scorecard`, {
+    signal,
+    cache: 'no-store',
+    headers: authHeaders(),
+  });
+  if (res.status === 401) throw new ApiError('Your session has expired. Please sign in again.', 401);
+  if (res.status === 403) throw new ApiError('You do not have permission to view the scorecard.', 403);
+  if (res.status === 404) throw new ApiError('No scorecard data has been loaded yet.', 404);
+  if (!res.ok) throw new ApiError(`The server returned an error (${res.status}).`, res.status);
+  const json = (await res.json()) as ScorecardResponse;
+  if (!json || !json.cycle || !Array.isArray(json.sections)) {
+    throw new ApiError('The server sent an unexpected response.', 500);
+  }
+  return json;
+}
 
 const toPct = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
 const fmt = (n: number) => n.toFixed(1);
@@ -91,8 +117,50 @@ export default function HseScorecardPage() {
   const [method, setMethod] = useState<Method>('average');
   const [sort, setSort] = useState<SortMode>('default');
 
+  const [payload, setPayload] = useState<ScorecardResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true); // first load only
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  const controllerRef = useRef<AbortController | null>(null);
+
+  const load = useCallback(async () => {
+    controllerRef.current?.abort(); // drop any request still in flight
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setRefreshing(true);
+    try {
+      const json = await fetchScorecard(controller.signal);
+      if (controller.signal.aborted) return;
+      setPayload(json);
+      setUpdatedAt(new Date());
+      setError(null);
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      setError(err instanceof Error ? err.message : 'Could not load the scorecard.');
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  // Load on mount, and again whenever the user comes back to this tab/window,
+  // so the page picks up audits that were saved elsewhere in the meantime.
+  useEffect(() => {
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      controllerRef.current?.abort();
+    };
+  }, [load]);
+
   const data = useMemo(() => {
-    const rows = SECTIONS.map((s) => ({
+    const rows = (payload?.sections ?? []).map((s) => ({
       ...s,
       actualPct: toPct(s.actual, s.allocated),
       adjustablePct: toPct(s.adjustable, s.allocated),
@@ -117,11 +185,11 @@ export default function HseScorecardPage() {
         ? toPct(totals.adjustable, totals.allocated)
         : rows.reduce((sum, r) => sum + r.adjustablePct, 0) / count;
 
-    const lowest = rows.reduce((min, r) => (r.actualPct < min.actualPct ? r : min), rows[0]);
-    const perfect = rows.filter((r) => r.actual === r.allocated).length;
+    const lowest = rows.length ? rows.reduce((min, r) => (r.actualPct < min.actualPct ? r : min), rows[0]) : null;
+    const perfect = rows.filter((r) => r.allocated > 0 && r.actual === r.allocated).length;
 
     return { rows, totals, overallActual, overallAdjustable, lowest, perfect };
-  }, [method]);
+  }, [payload, method]);
 
   const visibleRows = useMemo(() => {
     const copy = [...data.rows];
@@ -130,138 +198,186 @@ export default function HseScorecardPage() {
     return copy;
   }, [data.rows, sort]);
 
+  const period = payload?.cycle.label ?? '';
+
   return (
     <div className="min-h-screen w-full bg-slate-50 p-4 lg:p-8">
-      <header className="mb-6">
-        <div className="flex items-center gap-3">
-          <Award className="h-7 w-7 text-red-500" aria-hidden="true" />
-          <h1 className="text-2xl font-bold text-slate-800">HSE Scorecard</h1>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <Award className="h-7 w-7 text-red-500" aria-hidden="true" />
+            <h1 className="text-2xl font-bold text-slate-800">HSE Scorecard</h1>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Health, Safety &amp; Environment audit results by section.
+            {period ? ` Period: ${period}` : ''}
+          </p>
         </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Health, Safety &amp; Environment audit results by section. Period: {PERIOD_LABEL}
-        </p>
+
+        <div className="flex items-center gap-3">
+          {updatedAt && (
+            <span className="text-xs text-slate-500">
+              Updated {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={load}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </header>
 
-      <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="HSE score (actual)"
-          value={`${fmt(data.overallActual)}%`}
-          hint={method === 'average' ? `Average of ${data.rows.length} section percentages` : 'Total actual ÷ total allocated marks'}
-        />
-        <KpiCard
-          label="HSE score (adjustable)"
-          value={`${fmt(data.overallAdjustable)}%`}
-          hint="If the open findings are corrected"
-        />
-        <KpiCard
-          label="Sections at full marks"
-          value={`${data.perfect} of ${data.rows.length}`}
-          hint="Actual score equals allocated score"
-        />
-        <KpiCard
-          label="Lowest section"
-          value={`${fmt(data.lowest.actualPct)}%`}
-          hint={`${data.lowest.section} (${data.lowest.responsible})`}
-        />
-      </section>
+      {error && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+          {payload ? ' The figures below are from the last successful load.' : ''}
+        </div>
+      )}
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-              <ShieldCheck className="h-5 w-5 text-red-500" aria-hidden="true" />
-              Section scores
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Actual % = actual ÷ allocated × 100. Adjustable % uses the adjustable score the same way.
-            </p>
-          </div>
+      {loading ? (
+        <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+          Loading scorecard…
+        </p>
+      ) : !payload ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+          Nothing to show yet. Use Refresh to try again.
+        </div>
+      ) : (
+        <>
+          <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label="HSE score (actual)"
+              value={`${fmt(data.overallActual)}%`}
+              hint={
+                method === 'average'
+                  ? `Average of ${data.rows.length} section percentages`
+                  : 'Total actual ÷ total allocated marks'
+              }
+            />
+            <KpiCard
+              label="HSE score (adjustable)"
+              value={`${fmt(data.overallAdjustable)}%`}
+              hint="Adjustable marks ÷ allocated marks"
+            />
+            <KpiCard
+              label="Sections at full marks"
+              value={`${data.perfect} of ${data.rows.length}`}
+              hint="Actual score equals allocated score"
+            />
+            <KpiCard
+              label="Lowest section"
+              value={data.lowest ? `${fmt(data.lowest.actualPct)}%` : '–'}
+              hint={data.lowest ? `${data.lowest.section} (${data.lowest.responsible})` : 'No sections available'}
+            />
+          </section>
 
-          <div className="flex flex-wrap gap-4">
-            <div role="group" aria-label="Overall score method" className="inline-flex rounded-lg border border-slate-200 p-0.5">
-              {METHOD_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setMethod(o.value)}
-                  aria-pressed={method === o.value}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    method === o.value ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+          <section className="mt-6 rounded-xl border border-slate-200 bg-white">
+            <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+                  <ShieldCheck className="h-5 w-5 text-red-500" aria-hidden="true" />
+                  Section scores
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Actual % = actual ÷ allocated × 100. Adjustable % uses the adjustable score the same way.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div role="group" aria-label="Overall score method" className="inline-flex rounded-lg border border-slate-200 p-0.5">
+                  {METHOD_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setMethod(o.value)}
+                      aria-pressed={method === o.value}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        method === o.value ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div role="group" aria-label="Sort sections" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 p-0.5">
+                  <ArrowUpDown className="ml-2 h-4 w-4 text-slate-400" aria-hidden="true" />
+                  {SORT_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setSort(o.value)}
+                      aria-pressed={sort === o.value}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        sort === o.value ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div role="group" aria-label="Sort sections" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 p-0.5">
-              <ArrowUpDown className="ml-2 h-4 w-4 text-slate-400" aria-hidden="true" />
-              {SORT_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setSort(o.value)}
-                  aria-pressed={sort === o.value}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    sort === o.value ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[56rem] text-sm">
+                <caption className="sr-only">HSE audit scores by section for {period}</caption>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="px-4 py-3 text-left font-semibold">No</th>
+                    <th scope="col" className="px-4 py-3 text-left font-semibold">Section</th>
+                    <th scope="col" className="px-4 py-3 text-left font-semibold">Responsible</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Allocated</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Actual</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Adjustable</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Actual %</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Adjustable %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.map((r) => (
+                    <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-400 tabular-nums">{r.no}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {SECTION_PAGE_BASE && r.section_id !== null ? (
+                          <Link href={`${SECTION_PAGE_BASE}/${r.section_id}`} className="hover:text-red-600 hover:underline">
+                            {r.section}
+                          </Link>
+                        ) : (
+                          r.section
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{r.responsible}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{r.allocated}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{r.actual}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{r.adjustable}</td>
+                      <td className="px-4 py-3"><PercentBar value={r.actualPct} tone="actual" /></td>
+                      <td className="px-4 py-3"><PercentBar value={r.adjustablePct} tone="adjustable" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
+                    <td className="px-4 py-3" colSpan={3}>
+                      Overall ({method === 'average' ? 'average of section %' : 'weighted by marks'})
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{data.totals.allocated}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{data.totals.actual}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{data.totals.adjustable}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmt(data.overallActual)}%</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmt(data.overallAdjustable)}%</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[56rem] text-sm">
-            <caption className="sr-only">HSE audit scores by section for {PERIOD_LABEL}</caption>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <th scope="col" className="px-4 py-3 text-left font-semibold">No</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold">Section</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold">Responsible</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Allocated</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Actual</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Adjustable</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Actual %</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Adjustable %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((r) => (
-                <tr key={r.no} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-400 tabular-nums">{r.no}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{r.section}</td>
-                  <td className="px-4 py-3 text-slate-600">{r.responsible}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.allocated}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.actual}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.adjustable}</td>
-                  <td className="px-4 py-3"><PercentBar value={r.actualPct} tone="actual" /></td>
-                  <td className="px-4 py-3"><PercentBar value={r.adjustablePct} tone="adjustable" /></td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
-                <td className="px-4 py-3" colSpan={3}>
-                  Overall ({method === 'average' ? 'average of section %' : 'weighted by marks'})
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">{data.totals.allocated}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{data.totals.actual}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{data.totals.adjustable}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{fmt(data.overallActual)}%</td>
-                <td className="px-4 py-3 text-right tabular-nums">{fmt(data.overallAdjustable)}%</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </section>
-
-      <p className="mt-4 text-xs text-slate-500">
-        Scores shown are a snapshot of the audit workbook for {PERIOD_LABEL}. They will update automatically once this page is
-        connected to the audit API.
-      </p>
+          </section>
+        </>
+      )}
     </div>
   );
 }
