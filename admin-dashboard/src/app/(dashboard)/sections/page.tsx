@@ -1,52 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, Award, TrendingUp, Search, User, ArrowRight } from 'lucide-react';
-
-interface AuditSection {
-  id: number;
-  name: string;
-  slug: string;
-  responsible: string;
-  allocatedScore: number;
-  actualScore: number;
-  adjustableScore: number;
-}
-
-const sections: AuditSection[] = [
-  { id: 1, name: 'General Maintenance', slug: 'general-maintenance', responsible: 'Ruwandika', allocatedScore: 465, actualScore: 265, adjustableScore: 330 },
-  { id: 2, name: 'Admin', slug: 'admin', responsible: 'Dalton', allocatedScore: 265, actualScore: 225, adjustableScore: 245 },
-  { id: 3, name: 'RM Stores', slug: 'rm-stores', responsible: 'Chandrasiri', allocatedScore: 235, actualScore: 205, adjustableScore: 215 },
-  { id: 4, name: 'FG', slug: 'fg', responsible: 'Chandrasiri', allocatedScore: 155, actualScore: 130, adjustableScore: 130 },
-  { id: 5, name: 'Accessories', slug: 'accessories', responsible: 'Sampath', allocatedScore: 225, actualScore: 160, adjustableScore: 180 },
-  { id: 6, name: 'Cutting', slug: 'cutting', responsible: 'Chamila', allocatedScore: 155, actualScore: 155, adjustableScore: 155 },
-  { id: 7, name: 'Ground floor modules & Molding', slug: 'ground-floor-modules-molding', responsible: 'Gamini', allocatedScore: 265, actualScore: 205, adjustableScore: 225 },
-  { id: 8, name: 'Packing', slug: 'packing', responsible: 'Gamini', allocatedScore: 140, actualScore: 140, adjustableScore: 140 },
-  { id: 9, name: 'Audit room & Final Inspection', slug: 'audit-room-final-inspection', responsible: 'Lalinda', allocatedScore: 95, actualScore: 80, adjustableScore: 95 },
-  { id: 10, name: 'Lab & CPI', slug: 'lab-cpi', responsible: 'Chandani', allocatedScore: 130, actualScore: 115, adjustableScore: 130 },
-  { id: 11, name: 'Screen Printing & Modules', slug: 'screen-printing-modules', responsible: 'Gamini', allocatedScore: 210, actualScore: 125, adjustableScore: 140 },
-  { id: 12, name: 'Sample Room', slug: 'sample-room', responsible: 'Samitha', allocatedScore: 180, actualScore: 170, adjustableScore: 180 },
-  { id: 13, name: 'Coating', slug: 'coating', responsible: 'Chandani', allocatedScore: 205, actualScore: 190, adjustableScore: 190 },
-  { id: 14, name: 'Forte', slug: 'forte', responsible: 'Cooray', allocatedScore: 180, actualScore: 180, adjustableScore: 180 },
-  { id: 15, name: 'IE', slug: 'ie', responsible: 'Dilan', allocatedScore: 220, actualScore: 130, adjustableScore: 150 },
-  { id: 16, name: 'Training School', slug: 'training-school', responsible: 'Dilan', allocatedScore: 130, actualScore: 130, adjustableScore: 130 },
-  { id: 17, name: 'Medical Centre', slug: 'medical-centre', responsible: 'Nadee', allocatedScore: 100, actualScore: 95, adjustableScore: 95 },
-];
-
-const pct = (actual: number, allocated: number) =>
-  allocated > 0 ? Math.round((actual / allocated) * 100) : 0;
+import { sections, pct, sumItems, useChecklistStore } from './sectionsData';
 
 export default function SectionsAuditPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const { items } = useChecklistStore();
+
+  // Use checklist totals when a section has checklist data, otherwise the baseline scores.
+  const rows = useMemo(
+    () =>
+      sections.map((sec) => {
+        const list = items[sec.slug];
+        if (Array.isArray(list)) {
+          const t = sumItems(list);
+          return { ...sec, allocatedScore: t.allocated, actualScore: t.actual, adjustableScore: t.adjustable };
+        }
+        return sec;
+      }),
+    [items]
+  );
 
   const q = searchTerm.toLowerCase();
-  const filteredSections = sections.filter(
+  const filteredSections = rows.filter(
     (item) => item.name.toLowerCase().includes(q) || item.responsible.toLowerCase().includes(q)
   );
 
-  const totalAllocated = sections.reduce((acc, curr) => acc + curr.allocatedScore, 0);
-  const totalActual = sections.reduce((acc, curr) => acc + curr.actualScore, 0);
+  const totalAllocated = rows.reduce((acc, curr) => acc + curr.allocatedScore, 0);
+  const totalActual = rows.reduce((acc, curr) => acc + curr.actualScore, 0);
   const overallPct = pct(totalActual, totalAllocated);
 
   return (
