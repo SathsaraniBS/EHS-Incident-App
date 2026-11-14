@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
-class Section(Base):
+class AuditSection(Base):
     __tablename__ = "audit_sections"
 
     id = Column(Integer, primary_key=True)
@@ -17,8 +17,7 @@ class Section(Base):
     category = Column(String(200), nullable=False)
     display_order = Column(Integer, nullable=False, default=0)
 
-    items = relationship("ChecklistItem", back_populates="section",
-                         cascade="all, delete-orphan")
+    items = relationship("ChecklistItem", back_populates="section", cascade="all, delete-orphan")
 
 
 class AuditPeriod(Base):
@@ -40,10 +39,8 @@ class ChecklistItem(Base):
     )
 
     id = Column(Integer, primary_key=True)
-    section_id = Column(Integer, ForeignKey("audit_sections.id", ondelete="CASCADE"),
-                        nullable=False, index=True)
-    period_id = Column(Integer, ForeignKey("audit_periods.id", ondelete="CASCADE"),
-                       nullable=False, index=True)
+    section_id = Column(Integer, ForeignKey("audit_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("audit_periods.id", ondelete="CASCADE"), nullable=False, index=True)
     description = Column(Text, nullable=False)
     allocated = Column(Integer, nullable=False)
     actual = Column(Integer, nullable=False, default=0)
@@ -52,4 +49,4 @@ class ChecklistItem(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    section = relationship("Section", back_populates="items")
+    section = relationship("AuditSection", back_populates="items")
