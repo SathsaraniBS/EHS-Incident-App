@@ -37,7 +37,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL(role === 'admin' ? '/' : '/sections', req.url));
   }
 
-  if (role === 'client' && !pathname.startsWith('/sections')) {
+  if (
+    role === 'client' &&
+    !pathname.startsWith('/sections') &&
+    !pathname.startsWith('/api/sections')
+  ) {
     return NextResponse.redirect(new URL('/sections', req.url));
   }
 

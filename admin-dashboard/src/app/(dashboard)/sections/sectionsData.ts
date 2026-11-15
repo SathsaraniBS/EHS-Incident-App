@@ -6,11 +6,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 export interface ChecklistItem {
   id: number;
+  category?: string | null;
   description: string;
   allocated: number;
-  actual: number;
-  adjustable: number;
-  remark?: string;
+  actual: number | null; // null = not evaluated in this cycle yet
+  adjustable: number | null;
+  remark?: string | null;
+  evaluated: boolean;
 }
 
 export interface AuditSection {
@@ -19,55 +21,28 @@ export interface AuditSection {
   slug: string;
   responsible: string;
   category: string;
-  // Baseline scores, used only until a section has checklist items
   allocatedScore: number;
   actualScore: number;
   adjustableScore: number;
+  totalItems: number;
+  evaluatedItems: number;
 }
 
-/* ----------------------------- Sections ----------------------------- */
+export interface AuditCycle {
+  id: number;
+  label: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
 
-export const sections: AuditSection[] = [
-  { id: 1, name: 'General Maintenance', slug: 'general-maintenance', responsible: 'Ruwandika', category: 'Engineering / Factory Premises', allocatedScore: 465, actualScore: 265, adjustableScore: 330 },
-  { id: 2, name: 'Admin', slug: 'admin', responsible: 'Dalton', category: 'Factory Premises / Guard Room / Canteen', allocatedScore: 265, actualScore: 225, adjustableScore: 245 },
-  { id: 3, name: 'RM Stores', slug: 'rm-stores', responsible: 'Chandrasiri', category: 'Loading bay / RM Stores / Chemical room', allocatedScore: 235, actualScore: 205, adjustableScore: 215 },
-  { id: 4, name: 'FG', slug: 'fg', responsible: 'Chandrasiri', category: 'Finished Goods', allocatedScore: 155, actualScore: 130, adjustableScore: 130 },
-  { id: 5, name: 'Accessories', slug: 'accessories', responsible: 'Sampath', category: 'Accessories', allocatedScore: 225, actualScore: 160, adjustableScore: 180 },
-  { id: 6, name: 'Cutting', slug: 'cutting', responsible: 'Chamila', category: 'Cutting', allocatedScore: 155, actualScore: 155, adjustableScore: 155 },
-  { id: 7, name: 'Ground floor modules & Molding', slug: 'ground-floor-modules-molding', responsible: 'Gamini', category: 'Production', allocatedScore: 265, actualScore: 205, adjustableScore: 225 },
-  { id: 8, name: 'Packing', slug: 'packing', responsible: 'Gamini', category: 'Production', allocatedScore: 140, actualScore: 140, adjustableScore: 140 },
-  { id: 9, name: 'Audit room & Final Inspection', slug: 'audit-room-final-inspection', responsible: 'Lalinda', category: 'Quality', allocatedScore: 95, actualScore: 80, adjustableScore: 95 },
-  { id: 10, name: 'Lab & CPI', slug: 'lab-cpi', responsible: 'Chandani', category: 'Quality', allocatedScore: 130, actualScore: 115, adjustableScore: 130 },
-  { id: 11, name: 'Screen Printing & Modules', slug: 'screen-printing-modules', responsible: 'Gamini', category: 'Production', allocatedScore: 210, actualScore: 125, adjustableScore: 140 },
-  { id: 12, name: 'Sample Room', slug: 'sample-room', responsible: 'Samitha', category: 'Sample Room', allocatedScore: 180, actualScore: 170, adjustableScore: 180 },
-  { id: 13, name: 'Coating', slug: 'coating', responsible: 'Chandani', category: 'Production', allocatedScore: 205, actualScore: 190, adjustableScore: 190 },
-  { id: 14, name: 'Forte', slug: 'forte', responsible: 'Cooray', category: 'Production', allocatedScore: 180, actualScore: 180, adjustableScore: 180 },
-  { id: 15, name: 'IE', slug: 'ie', responsible: 'Dilan', category: 'Industrial Engineering', allocatedScore: 220, actualScore: 130, adjustableScore: 150 },
-  { id: 16, name: 'Training School', slug: 'training-school', responsible: 'Dilan', category: 'Training', allocatedScore: 130, actualScore: 130, adjustableScore: 130 },
-  { id: 17, name: 'Medical Centre', slug: 'medical-centre', responsible: 'Nadee', category: 'Medical', allocatedScore: 100, actualScore: 95, adjustableScore: 95 },
-];
-
-/* ----------------------------- Default checklist data ----------------------------- */
-
-export const defaultItems: Record<string, ChecklistItem[]> = {
-  'general-maintenance': [
-    { id: 1, description: 'Table, chairs, Tap and electric equipment, fences not broken (Boiler, Fan, Light, Emergency light)', allocated: 20, actual: 0, adjustable: 20, remark: 'Catering Table broken, Cupboard doors broken' },
-    { id: 2, description: 'Squatting pans, commodes, wash basins, tiles and doors in good condition', allocated: 20, actual: 20, adjustable: 20 },
-    { id: 3, description: 'Insufficient number of toilets in ratio', allocated: 10, actual: 10, adjustable: 10 },
-    { id: 4, description: 'Condition monitoring system available for fire pump system', allocated: 5, actual: 5, adjustable: 5 },
-    { id: 5, description: 'Contractors use suitable PPEs depending on nature of work', allocated: 15, actual: 15, adjustable: 15 },
-  ],
-  admin: [
-    { id: 1, description: 'Separate waste collection bins provided (Foot operated or closed lid)', allocated: 10, actual: 10, adjustable: 10 },
-    { id: 2, description: 'All food handling areas free of pests/animals and maintaining hygiene', allocated: 5, actual: 5, adjustable: 5 },
-    { id: 3, description: 'Kitchen is designed to prevent cross-contamination', allocated: 15, actual: 0, adjustable: 0, remark: 'Corrective action not taken as per PHI record' },
-    { id: 4, description: 'Covered bins available in toilets', allocated: 10, actual: 10, adjustable: 10 },
-  ],
-  'rm-stores': [
-    { id: 1, description: 'Emergency Exit doors are not closed', allocated: 20, actual: 20, adjustable: 20 },
-    { id: 2, description: 'Emergency exits pathways are not obstructed', allocated: 10, actual: 0, adjustable: 10, remark: 'Obstruction found near adhesive room' },
-    { id: 3, description: 'Smoke detectors & Fire fighting equipment not obstructed', allocated: 10, actual: 10, adjustable: 10 },
-  ],
+export type ItemInput = {
+  id?: number;
+  category?: string;
+  description: string;
+  allocated: number;
+  actual: number;
+  adjustable: number;
+  remark?: string;
 };
 
 /* ----------------------------- Helpers ----------------------------- */
@@ -75,71 +50,174 @@ export const defaultItems: Record<string, ChecklistItem[]> = {
 export const pct = (actual: number, allocated: number) =>
   allocated > 0 ? Math.round((actual / allocated) * 100) : 0;
 
-export const sumItems = (items: ChecklistItem[]) => ({
-  allocated: items.reduce((a, i) => a + i.allocated, 0),
-  actual: items.reduce((a, i) => a + i.actual, 0),
-  adjustable: items.reduce((a, i) => a + i.adjustable, 0),
-});
-
-/**
- * TODO: replace with your real auth check (session / JWT / context).
- * Until then every user of this dashboard is treated as admin.
- */
-export function useIsAdmin(): boolean {
-  return true;
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
 }
 
-/* ----------------------------- Store (localStorage) ----------------------------- */
-
-const STORAGE_KEY = 'ehs-sections-audit-items-v1';
-
-export type ItemInput = Omit<ChecklistItem, 'id'> & { id?: number };
-
 /**
- * Shared checklist store. Persisted in localStorage so the list page and detail
- * page stay in sync. To use a real database later, replace upsertItem/deleteItem
- * with API calls (fetch to your backend) and keep the same signatures.
+ * Calls the Next.js proxy (src/app/api/sections/[[...path]]/route.ts), which adds
+ * the login cookie's token and forwards to FastAPI. The browser never sees the token.
  */
-export function useChecklistStore() {
-  const [items, setItems] = useState<Record<string, ChecklistItem[]>>(defaultItems);
-  const [loaded, setLoaded] = useState(false);
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(`/api/sections${path}`, {
+    ...init,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+  });
+
+  if (res.status === 401 && typeof window !== 'undefined') {
+    window.location.href = '/login';
+    throw new ApiError('Session expired. Please sign in again.', 401);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = Array.isArray(body.detail)
+      ? body.detail.map((d: { msg?: string }) => d.msg).join(', ')
+      : body.detail;
+    throw new ApiError(detail || `Request failed (${res.status})`, res.status);
+  }
+  return res.status === 204 ? (undefined as T) : res.json();
+}
+
+/* ----------------------------- API -> UI mapping ----------------------------- */
+
+interface ApiSection {
+  id: number;
+  name: string;
+  slug: string;
+  responsible: string;
+  category: string;
+  allocated_score: number;
+  actual_score: number;
+  adjustable_score: number;
+  total_items: number;
+  evaluated_items: number;
+  cycle?: AuditCycle;
+  items?: ChecklistItem[];
+}
+
+const toSection = (s: ApiSection): AuditSection => ({
+  id: s.id,
+  name: s.name,
+  slug: s.slug,
+  responsible: s.responsible,
+  category: s.category,
+  allocatedScore: s.allocated_score,
+  actualScore: s.actual_score,
+  adjustableScore: s.adjustable_score,
+  totalItems: s.total_items,
+  evaluatedItems: s.evaluated_items,
+});
+
+const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+/* ----------------------------- Hooks ----------------------------- */
+
+/** Admin check for showing/hiding buttons only. The server enforces it for real. */
+export function useIsAdmin(): boolean {
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    let alive = true;
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const role = data?.role ?? data?.user?.role;
+        if (alive) setIsAdmin(role === 'admin');
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return isAdmin;
+}
+
+/** Section cards for the latest audit cycle. */
+export function useSections() {
+  const [sections, setSections] = useState<AuditSection[]>([]);
+  const [cycle, setCycle] = useState<AuditCycle | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setItems(JSON.parse(raw));
-    } catch {
-      /* ignore corrupted storage */
+      setError(null);
+      const [cycles, data] = await Promise.all([
+        request<AuditCycle[]>('/cycles'),
+        request<ApiSection[]>(''),
+      ]);
+      setCycle(cycles[0] ?? null); // newest first
+      setSections(data.map(toSection));
+    } catch (e) {
+      setError(errMsg(e, 'Failed to load sections'));
+    } finally {
+      setLoading(false);
     }
-    setLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!loaded) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      /* storage full / unavailable */
-    }
-  }, [items, loaded]);
+    reload();
+  }, [reload]);
 
-  const upsertItem = useCallback((slug: string, input: ItemInput) => {
-    setItems((prev) => {
-      const list = prev[slug] ?? [];
-      if (input.id !== undefined) {
-        return {
-          ...prev,
-          [slug]: list.map((it) => (it.id === input.id ? ({ ...input, id: it.id } as ChecklistItem) : it)),
-        };
+  return { sections, cycle, loading, error, reload };
+}
+
+/** One section with its checklist for the latest audit cycle. */
+export function useSectionDetail(slug: string) {
+  const [section, setSection] = useState<AuditSection | null>(null);
+  const [cycle, setCycle] = useState<AuditCycle | null>(null);
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      setError(null);
+      setNotFound(false);
+      const data = await request<ApiSection>(`/${encodeURIComponent(slug)}`);
+      setSection(toSection(data));
+      setCycle(data.cycle ?? null);
+      setItems(data.items ?? []);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404 && /section/i.test(e.message)) setNotFound(true);
+      else setError(errMsg(e, 'Failed to load section'));
+    } finally {
+      setLoading(false);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Saves to the database, then reloads so the totals always come from the server.
+  const upsertItem = useCallback(
+    async (input: ItemInput) => {
+      const { id, ...body } = input;
+      if (id !== undefined) {
+        await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        await request(`/${encodeURIComponent(slug)}/items`, { method: 'POST', body: JSON.stringify(body) });
       }
-      const nextId = list.reduce((m, it) => Math.max(m, it.id), 0) + 1;
-      return { ...prev, [slug]: [...list, { ...input, id: nextId } as ChecklistItem] };
-    });
-  }, []);
+      await reload();
+    },
+    [slug, reload]
+  );
 
-  const deleteItem = useCallback((slug: string, id: number) => {
-    setItems((prev) => ({ ...prev, [slug]: (prev[slug] ?? []).filter((it) => it.id !== id) }));
-  }, []);
+  const deleteItem = useCallback(
+    async (id: number) => {
+      await request(`/items/${id}`, { method: 'DELETE' });
+      await reload();
+    },
+    [reload]
+  );
 
-  return { items, loaded, upsertItem, deleteItem };
+  return { section, cycle, items, loading, error, notFound, upsertItem, deleteItem, reload };
 }
