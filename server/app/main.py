@@ -33,7 +33,7 @@ from app.models.rating import SeverityLevel, HseCategory, RatingRule  # noqa: F4
 from app.models.scorecard import AuditCycle, SectionScore  # noqa: F401
 
 # NEW: sections audit models (audit_sections, audit_periods, section_checklist_items)
-from app.models import section as section_models  # noqa: F401
+from app.models import checklist_result  # noqa: F401
 
 # Routers
 from app.routers.auth import router as auth_router
