@@ -1,10 +1,17 @@
-// src/app/api/compliance/[...path]/route.ts
+// src/app/api/sections/[[...path]]/route.ts
+//
+// Forwards /api/sections/...  ->  FastAPI /api/sections/...
+// Same pattern as api/compliance/[...path]/route.ts, with three differences:
+//  1. [[...path]] (double brackets) so plain /api/sections (no extra segment) also matches
+//  2. PUT is supported (the backend updates checklist items with PUT)
+//  3. The backend path is /api/sections, not /api/v1/compliance
 import { NextRequest, NextResponse } from 'next/server';
 import { TOKEN_COOKIE } from '@/lib/auth';
 
 const BACKEND =
   process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+// slugs (general-maintenance), numeric ids, "items", "cycles"
 const SEGMENT = /^[A-Za-z0-9_-]+$/;
 
 function extractDetail(data: unknown, fallback: string): string {
@@ -21,18 +28,18 @@ function extractDetail(data: unknown, fallback: string): string {
   return fallback;
 }
 
-type Ctx = { params: Promise<{ path: string[] }> };
+type Ctx = { params: Promise<{ path?: string[] }> };
 
 async function forward(req: NextRequest, ctx: Ctx) {
   const token = req.cookies.get(TOKEN_COOKIE)?.value;
   if (!token) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
 
-  const { path } = await ctx.params;
-  if (!path.length || !path.every((s) => SEGMENT.test(s))) {
+  const { path = [] } = await ctx.params; // empty for GET /api/sections
+  if (!path.every((s) => SEGMENT.test(s))) {
     return NextResponse.json({ detail: 'Invalid path' }, { status: 400 });
   }
 
-  const hasBody = req.method === 'POST' || req.method === 'PATCH';
+  const hasBody = req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH';
   const init: RequestInit = {
     method: req.method,
     headers: {
@@ -43,11 +50,10 @@ async function forward(req: NextRequest, ctx: Ctx) {
   };
   if (hasBody) init.body = await req.text();
 
+  const suffix = path.length ? `/${path.join('/')}` : '';
+
   try {
-    const res = await fetch(
-      `${BACKEND}/api/v1/compliance/${path.join('/')}${req.nextUrl.search}`,
-      init
-    );
+    const res = await fetch(`${BACKEND}/api/sections${suffix}${req.nextUrl.search}`, init);
     if (res.status === 204) return new NextResponse(null, { status: 204 });
 
     const data = await res.json().catch(() => ({}));
@@ -65,5 +71,5 @@ async function forward(req: NextRequest, ctx: Ctx) {
 
 export const GET = forward;
 export const POST = forward;
-export const PATCH = forward;
+export const PUT = forward;
 export const DELETE = forward;

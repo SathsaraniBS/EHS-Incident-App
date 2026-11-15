@@ -16,17 +16,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import {
-  sections,
-  pct,
-  sumItems,
-  useChecklistStore,
-  useIsAdmin,
-  type ChecklistItem,
-} from '../sectionsData';
+import { pct, useIsAdmin, useSectionDetail, type ChecklistItem } from '../sectionsData';
 
 interface FormState {
   id?: number;
+  category: string;
   description: string;
   allocated: string;
   actual: string;
@@ -34,7 +28,7 @@ interface FormState {
   remark: string;
 }
 
-const emptyForm: FormState = { description: '', allocated: '', actual: '', adjustable: '', remark: '' };
+const emptyForm: FormState = { category: '', description: '', allocated: '', actual: '', adjustable: '', remark: '' };
 
 const inputCls =
   'w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition';
@@ -43,13 +37,13 @@ export default function SectionDetailPage() {
   const params = useParams();
   const slug = (params?.slug as string) || '';
   const isAdmin = useIsAdmin();
-  const { items, loaded, upsertItem, deleteItem } = useChecklistStore();
+  const { section, cycle, items, loading, error, notFound, upsertItem, deleteItem } = useSectionDetail(slug);
 
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<ChecklistItem | null>(null);
-
-  const section = sections.find((s) => s.slug === slug);
+  const [deleteError, setDeleteError] = useState('');
 
   const BackButton = (
     <Link
@@ -61,7 +55,11 @@ export default function SectionDetailPage() {
     </Link>
   );
 
-  if (!section) {
+  if (loading) {
+    return <div className="w-full min-h-screen bg-slate-50 p-8 text-sm text-slate-500">Loading…</div>;
+  }
+
+  if (notFound || (!section && !error)) {
     return (
       <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6">
         <div className="border-b border-slate-200 pb-4">{BackButton}</div>
@@ -76,9 +74,19 @@ export default function SectionDetailPage() {
     );
   }
 
-  const list: ChecklistItem[] = items[slug] ?? [];
-  const totals = sumItems(list);
-  const scorePct = pct(totals.actual, totals.allocated);
+  if (error || !section) {
+    return (
+      <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6">
+        <div className="border-b border-slate-200 pb-4">{BackButton}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+          <p className="font-semibold">Could not load this section.</p>
+          <p className="mt-1">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const scorePct = pct(section.actualScore, section.allocatedScore);
 
   /* ----------------------------- Handlers ----------------------------- */
 
@@ -91,10 +99,11 @@ export default function SectionDetailPage() {
     setFormError('');
     setForm({
       id: item.id,
+      category: item.category ?? '',
       description: item.description,
       allocated: String(item.allocated),
-      actual: String(item.actual),
-      adjustable: String(item.adjustable),
+      actual: item.actual === null ? '' : String(item.actual),
+      adjustable: item.adjustable === null ? '' : String(item.adjustable),
       remark: item.remark ?? '',
     });
   };
@@ -104,9 +113,9 @@ export default function SectionDetailPage() {
     setFormError('');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form) return;
+    if (!form || saving) return;
 
     const description = form.description.trim();
     const allocated = Number(form.allocated);
@@ -114,29 +123,46 @@ export default function SectionDetailPage() {
     const adjustable = Number(form.adjustable);
 
     if (!description) return setFormError('Audit description is required.');
-    if ([form.allocated, form.actual, form.adjustable].some((v) => v.trim() === '') ||
-        [allocated, actual, adjustable].some((n) => Number.isNaN(n))) {
+    if (
+      [form.allocated, form.actual, form.adjustable].some((v) => v.trim() === '') ||
+      [allocated, actual, adjustable].some((n) => Number.isNaN(n))
+    ) {
       return setFormError('Allocated, Actual and Adjustable must be numbers.');
     }
+    if (![allocated, actual, adjustable].every(Number.isInteger)) return setFormError('Marks must be whole numbers.');
     if (allocated < 0 || actual < 0 || adjustable < 0) return setFormError('Marks cannot be negative.');
     if (actual > allocated) return setFormError('Actual cannot be greater than Allocated.');
     if (adjustable > allocated) return setFormError('Adjustable cannot be greater than Allocated.');
     if (adjustable < actual) return setFormError('Adjustable cannot be less than Actual.');
 
-    upsertItem(slug, {
-      id: form.id,
-      description,
-      allocated,
-      actual,
-      adjustable,
-      remark: form.remark.trim() || undefined,
-    });
-    closeForm();
+    setSaving(true);
+    try {
+      await upsertItem({
+        id: form.id,
+        category: form.category.trim() || undefined,
+        description,
+        allocated,
+        actual,
+        adjustable,
+        remark: form.remark.trim() || undefined,
+      });
+      closeForm();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not save. Try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const confirmDelete = () => {
-    if (deleting) deleteItem(slug, deleting.id);
-    setDeleting(null);
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      await deleteItem(deleting.id);
+      setDeleting(null);
+      setDeleteError('');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete. Try again.');
+    }
   };
 
   /* ----------------------------- Render ----------------------------- */
@@ -165,22 +191,22 @@ export default function SectionDetailPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{section.name}</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            Inspecting health, safety & environmental evaluation criteria and compliance findings.
+            Audit Period: {cycle ? cycle.label : '—'}
           </p>
         </div>
 
         <div className="grid grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 shrink-0">
           <div className="text-center px-3">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Allocated</span>
-            <span className="text-lg sm:text-xl font-extrabold font-mono text-slate-900">{totals.allocated}</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-slate-900">{section.allocatedScore}</span>
           </div>
           <div className="text-center px-3 border-l border-slate-200">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Actual</span>
-            <span className="text-lg sm:text-xl font-extrabold font-mono text-amber-600">{totals.actual}</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-amber-600">{section.actualScore}</span>
           </div>
           <div className="text-center px-3 border-l border-slate-200">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Adjustable</span>
-            <span className="text-lg sm:text-xl font-extrabold font-mono text-indigo-600">{totals.adjustable}</span>
+            <span className="text-lg sm:text-xl font-extrabold font-mono text-indigo-600">{section.adjustableScore}</span>
           </div>
           <div className="text-center px-3 border-l border-slate-200">
             <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Score %</span>
@@ -198,7 +224,7 @@ export default function SectionDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">
-              {list.length} Evaluated Items
+              {section.evaluatedItems} of {section.totalItems} evaluated
             </span>
             {isAdmin && (
               <button
@@ -212,9 +238,7 @@ export default function SectionDetailPage() {
           </div>
         </div>
 
-        {!loaded ? (
-          <div className="p-10 text-center text-sm text-slate-500">Loading…</div>
-        ) : list.length === 0 ? (
+        {items.length === 0 ? (
           <div className="p-12 text-center">
             <Inbox className="mx-auto h-10 w-10 text-slate-400" />
             <p className="mt-2 text-sm text-slate-500">No audit criteria have been recorded for this section yet.</p>
@@ -243,15 +267,26 @@ export default function SectionDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {list.map((item, idx) => (
+                {items.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-medium">{idx + 1}</td>
-                    <td className="py-3.5 px-4 text-slate-800 font-medium leading-relaxed">{item.description}</td>
+                    <td className="py-3.5 px-4 text-slate-800 font-medium leading-relaxed">
+                      {item.category && <span className="block text-[11px] text-slate-400 font-normal">{item.category}</span>}
+                      {item.description}
+                    </td>
                     <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700">{item.allocated}</td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600">{item.actual}</td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">{item.adjustable}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600">
+                      {item.evaluated ? item.actual : '—'}
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
+                      {item.evaluated ? item.adjustable : '—'}
+                    </td>
                     <td className="py-3.5 px-4 text-xs">
-                      {item.remark ? (
+                      {!item.evaluated ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 border border-slate-200 font-medium">
+                          Not evaluated
+                        </span>
+                      ) : item.remark ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 text-rose-700 border border-rose-200 font-medium">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-500" />
                           {item.remark}
@@ -268,13 +303,16 @@ export default function SectionDetailPage() {
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => openEdit(item)}
-                            title="Edit"
+                            title={item.evaluated ? 'Edit' : 'Evaluate'}
                             className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setDeleting(item)}
+                            onClick={() => {
+                              setDeleteError('');
+                              setDeleting(item);
+                            }}
                             title="Delete"
                             className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
                           >
@@ -293,10 +331,7 @@ export default function SectionDetailPage() {
 
       {/* Add / Edit Modal */}
       {isAdmin && form && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          onClick={closeForm}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={closeForm}>
           <form
             onSubmit={handleSave}
             onClick={(e) => e.stopPropagation()}
@@ -312,6 +347,19 @@ export default function SectionDetailPage() {
             </div>
 
             <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                  Category <span className="normal-case font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  placeholder="e.g. Factory Premises"
+                  className={inputCls}
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Audit Description / Criterion
@@ -335,7 +383,7 @@ export default function SectionDetailPage() {
                     <input
                       type="number"
                       min={0}
-                      step="any"
+                      step={1}
                       value={form[field]}
                       onChange={(e) => setForm({ ...form, [field]: e.target.value })}
                       className={`${inputCls} font-mono`}
@@ -346,7 +394,8 @@ export default function SectionDetailPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Remark / Observation <span className="normal-case font-normal text-slate-400">(leave empty if compliant)</span>
+                  Remark / Observation{' '}
+                  <span className="normal-case font-normal text-slate-400">(leave empty if compliant)</span>
                 </label>
                 <textarea
                   rows={2}
@@ -375,9 +424,10 @@ export default function SectionDetailPage() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"
+                disabled={saving}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60 transition"
               >
-                {form.id !== undefined ? 'Save Changes' : 'Add Criterion'}
+                {saving ? 'Saving…' : form.id !== undefined ? 'Save Changes' : 'Add Criterion'}
               </button>
             </div>
           </form>
@@ -386,10 +436,7 @@ export default function SectionDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {isAdmin && deleting && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          onClick={() => setDeleting(null)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setDeleting(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 p-6"
@@ -402,8 +449,9 @@ export default function SectionDetailPage() {
                 <h2 className="text-lg font-bold text-slate-900">Delete this criterion?</h2>
                 <p className="text-sm text-slate-500 mt-1">{deleting.description}</p>
                 <p className="text-xs text-slate-400 mt-2">
-                  Section totals will be recalculated. This cannot be undone.
+                  It is removed from every audit cycle, and section totals are recalculated. This cannot be undone.
                 </p>
+                {deleteError && <p className="text-xs text-rose-600 mt-2">{deleteError}</p>}
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

@@ -1,36 +1,37 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, Award, TrendingUp, Search, User, ArrowRight } from 'lucide-react';
-import { sections, pct, sumItems, useChecklistStore } from './sectionsData';
+import { pct, useSections } from './sectionsData';
 
 export default function SectionsAuditPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const { items } = useChecklistStore();
-
-  // Use checklist totals when a section has checklist data, otherwise the baseline scores.
-  const rows = useMemo(
-    () =>
-      sections.map((sec) => {
-        const list = items[sec.slug];
-        if (Array.isArray(list)) {
-          const t = sumItems(list);
-          return { ...sec, allocatedScore: t.allocated, actualScore: t.actual, adjustableScore: t.adjustable };
-        }
-        return sec;
-      }),
-    [items]
-  );
+  const { sections, cycle, loading, error } = useSections();
 
   const q = searchTerm.toLowerCase();
-  const filteredSections = rows.filter(
+  const filteredSections = sections.filter(
     (item) => item.name.toLowerCase().includes(q) || item.responsible.toLowerCase().includes(q)
   );
 
-  const totalAllocated = rows.reduce((acc, curr) => acc + curr.allocatedScore, 0);
-  const totalActual = rows.reduce((acc, curr) => acc + curr.actualScore, 0);
+  const totalAllocated = sections.reduce((acc, curr) => acc + curr.allocatedScore, 0);
+  const totalActual = sections.reduce((acc, curr) => acc + curr.actualScore, 0);
   const overallPct = pct(totalActual, totalAllocated);
+
+  if (loading) {
+    return <div className="w-full min-h-screen bg-slate-50 p-8 text-sm text-slate-500">Loading sections…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="w-full min-h-screen bg-slate-50 p-8">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+          <p className="font-semibold">Could not load the sections audit.</p>
+          <p className="mt-1">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 lg:p-8 space-y-6 overflow-x-hidden">
@@ -42,7 +43,8 @@ export default function SectionsAuditPage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Sections Audit Dashboard</h1>
         <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-          Audit Period: 3rd & 4th Week, October 2026 | Select any section to inspect granular audit metrics & checklists.
+          Audit Period: {cycle ? cycle.label : 'No audit cycle created yet'} | Select any section to inspect granular
+          audit metrics & checklists.
         </p>
       </div>
 
@@ -98,7 +100,8 @@ export default function SectionsAuditPage() {
           />
         </div>
         <div className="text-xs font-medium text-slate-500 hidden sm:block">
-          Showing <span className="font-bold text-slate-800">{filteredSections.length}</span> of {sections.length} sections
+          Showing <span className="font-bold text-slate-800">{filteredSections.length}</span> of {sections.length}{' '}
+          sections
         </div>
       </div>
 
@@ -110,6 +113,7 @@ export default function SectionsAuditPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredSections.map((sec) => {
+            const notStarted = sec.evaluatedItems === 0;
             const sectionPct = pct(sec.actualScore, sec.allocatedScore);
 
             return (
@@ -142,15 +146,25 @@ export default function SectionsAuditPage() {
                     <span className="text-slate-500">Actual Score:</span>
                     <span className="font-mono font-semibold text-amber-600">{sec.actualScore} pts</span>
                   </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Items evaluated:</span>
+                    <span className="font-mono font-semibold text-slate-700">
+                      {sec.evaluatedItems} / {sec.totalItems}
+                    </span>
+                  </div>
                   <div className="flex justify-between text-xs pt-1 border-t border-slate-200/60">
                     <span className="text-slate-500 font-medium">Achievement:</span>
-                    <span
-                      className={`font-mono font-bold ${
-                        sectionPct >= 90 ? 'text-emerald-600' : sectionPct >= 75 ? 'text-amber-600' : 'text-rose-600'
-                      }`}
-                    >
-                      {sectionPct}%
-                    </span>
+                    {notStarted ? (
+                      <span className="font-mono font-bold text-slate-400">Not evaluated</span>
+                    ) : (
+                      <span
+                        className={`font-mono font-bold ${
+                          sectionPct >= 90 ? 'text-emerald-600' : sectionPct >= 75 ? 'text-amber-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {sectionPct}%
+                      </span>
+                    )}
                   </div>
                 </div>
 
