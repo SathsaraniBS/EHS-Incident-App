@@ -1,9 +1,23 @@
+from datetime import date
 from typing import List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class CycleIn(BaseModel):
+    label: str = Field(min_length=3, max_length=80)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class CycleOut(CycleIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
 class ItemIn(BaseModel):
-    description: str = Field(min_length=3, max_length=1000)
+    category: Optional[str] = Field(default=None, max_length=255)
+    description: str = Field(min_length=3, max_length=2000)
     allocated: int = Field(ge=0, le=1000)
     actual: int = Field(ge=0)
     adjustable: int = Field(ge=0)
@@ -18,9 +32,15 @@ class ItemIn(BaseModel):
         return self
 
 
-class ItemOut(ItemIn):
-    model_config = ConfigDict(from_attributes=True)
+class ItemOut(BaseModel):
     id: int
+    category: Optional[str] = None
+    description: str
+    allocated: int
+    actual: Optional[int] = None       # None = මේ cycle එකේ තවම evaluate කරලා නැහැ
+    adjustable: Optional[int] = None
+    remark: Optional[str] = None
+    evaluated: bool
 
 
 class SectionSummary(BaseModel):
@@ -32,7 +52,10 @@ class SectionSummary(BaseModel):
     allocated_score: int
     actual_score: int
     adjustable_score: int
+    total_items: int
+    evaluated_items: int
 
 
 class SectionDetail(SectionSummary):
+    cycle: CycleOut
     items: List[ItemOut]
