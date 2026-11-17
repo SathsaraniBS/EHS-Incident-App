@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -73,6 +74,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-red-600" />
+            <Image src="/images/logo.png" alt="Bondville logo" width={28} height={28} className="h-7 w-auto" />
             <span className="font-bold tracking-wider text-sm">BONDVILLE</span>
           </div>
           <button
