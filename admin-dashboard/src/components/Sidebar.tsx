@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -13,22 +12,23 @@ import {
   ShieldCheck,
   ClipboardList,
   FileWarning,
+  Building2,
   LogOut,
   type LucideIcon,
 } from 'lucide-react';
-import type { Role, SessionUser } from '@/lib/auth';
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  roles: Role[];
+  roles: string[];
   isActive: (pathname: string) => boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Incidents Portal', icon: FileText, roles: ['admin'], isActive: (p) => p === '/' },
-  { href: '/sections', label: 'Sections Audit', icon: BarChart2, roles: ['admin', 'client'], isActive: (p) => p.startsWith('/sections') },
+  { href: '/sections', label: 'Sections Audit', icon: BarChart2, roles: ['admin', 'client'], isActive: (p) => p.startsWith('/sections') && p !== '/sections-manage' },
+  { href: '/sections-manage', label: 'Section Management', icon: Building2, roles: ['admin'], isActive: (p) => p.startsWith('/sections-manage') },
   { href: '/hse-scorecard', label: 'HSE Scorecard', icon: Award, roles: ['admin'], isActive: (p) => p === '/hse-scorecard' },
   { href: '/compliance', label: 'Compliance', icon: ShieldCheck, roles: ['admin'], isActive: (p) => p === '/compliance' },
   { href: '/compliance/audits', label: 'Audit Register', icon: ClipboardList, roles: ['admin'], isActive: (p) => p.startsWith('/compliance/audits') },
@@ -39,32 +39,33 @@ const NAV_ITEMS: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const [user, setUser] = useState<{ full_name?: string; role: string } | null>(null);
 
+  // Load session from localStorage or API fallback
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!cancelled) setUser(data);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const storedUser = localStorage.getItem('bondville_user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        setUser({
+          full_name: parsed.name || parsed.email || 'Admin User',
+          role: parsed.role || 'admin',
+        });
+      } else {
+        // Fallback default for testing if localStorage is empty
+        setUser({ full_name: 'BSS (Turnaround Coordinator)', role: 'admin' });
+      }
+    } catch {
+      setUser({ full_name: 'Admin User', role: 'admin' });
+    }
   }, []);
 
-  const visibleItems = user ? NAV_ITEMS.filter((n) => n.roles.includes(user.role)) : [];
+  const visibleItems = user ? NAV_ITEMS.filter((n) => n.roles.includes(user.role)) : NAV_ITEMS;
 
-  const handleSignOut = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } finally {
-      router.replace('/login');
-      router.refresh();
-    }
+  const handleSignOut = () => {
+    localStorage.removeItem('bondville_user');
+    router.replace('/login');
+    router.refresh();
   };
 
   return (
@@ -73,8 +74,9 @@ export default function Sidebar() {
       <header className="md:hidden bg-zinc-950 text-white border-b border-zinc-900 px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-red-600" />
-            <Image src="/images/logo.png" alt="Bondville logo" width={28} height={28} className="h-7 w-auto" />
+            <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center">
+              <ShieldAlert className="w-4 h-4 text-red-600" />
+            </div>
             <span className="font-bold tracking-wider text-sm">BONDVILLE</span>
           </div>
           <button
@@ -84,7 +86,7 @@ export default function Sidebar() {
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
-        <nav className="flex gap-2 overflow-x-auto">
+        <nav className="flex gap-2 overflow-x-auto pb-1">
           {visibleItems.map(({ href, label, icon: Icon, isActive }) => (
             <Link
               key={href}
@@ -102,7 +104,7 @@ export default function Sidebar() {
       {/* ===== Desktop sidebar ===== */}
       <aside className="hidden md:flex md:sticky md:top-0 md:h-screen w-64 shrink-0 flex-col bg-zinc-950 text-white p-6 shadow-2xl border-r border-zinc-900">
         <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-zinc-900">
-          <div className="w-9 h-9 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center shadow-inner">
+          <div className="w-9 h-9 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center shadow-inner">
             <ShieldAlert className="w-5 h-5 text-red-600" />
           </div>
           <div>
@@ -113,7 +115,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        <nav className="space-y-2 flex-1 overflow-y-auto">
+        <nav className="space-y-1.5 flex-1 overflow-y-auto pr-1">
           {visibleItems.map(({ href, label, icon: Icon, isActive }) => {
             const active = isActive(pathname);
             return (
@@ -136,7 +138,7 @@ export default function Sidebar() {
         <div className="pt-4 border-t border-zinc-900 text-xs text-zinc-500 space-y-3">
           <div>
             <p className="uppercase tracking-wider text-[10px]">Logged in as:</p>
-            <p className="text-zinc-200 font-semibold mt-0.5 tracking-wide">{user?.full_name ?? '—'}</p>
+            <p className="text-zinc-200 font-semibold mt-0.5 tracking-wide">{user?.full_name ?? 'BSS'}</p>
             {user && <p className="text-[10px] uppercase tracking-wider text-red-500 mt-0.5">{user.role}</p>}
           </div>
           <button
