@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ShieldCheck,
   Plus,
@@ -23,7 +22,6 @@ import {
 } from '@/services/sectionService';
 
 export default function AdminSectionManagementPage() {
-  const router = useRouter();
   const [sections, setSections] = useState<ManagedSection[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -40,20 +38,12 @@ export default function AdminSectionManagementPage() {
   const [newCriterionDesc, setNewCriterionDesc] = useState('');
   const [newCriterionMarks, setNewCriterionMarks] = useState<number>(10);
 
-  // Role Guard (Admin Only)
+  // Auth & role checks are already enforced by src/proxy.ts (JWT cookie),
+  // so this page only needs to load its data.
   useEffect(() => {
-    const raw = localStorage.getItem('bondville_user');
-    if (!raw) {
-      router.push('/login');
-      return;
-    }
-    const user = JSON.parse(raw);
-    if (user.role !== 'admin') {
-      router.push('/client/sections');
-      return;
-    }
     loadSections();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadSections = async () => {
     setLoading(true);
