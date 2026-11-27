@@ -24,18 +24,14 @@ type Method = 'average' | 'weighted';
 type SortMode = 'default' | 'lowest' | 'highest';
 
 /* ---------------------------------------------------------------------------
- * SETTINGS - check these three lines against how your other dashboard pages work
+ * SETTINGS
  * ------------------------------------------------------------------------- */
 
-// Backend address. Use the same env variable your other pages use.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-
-// Where the login token is kept in the browser. Open any page that already calls
-// the API (for example the compliance page) and copy how it reads the token.
-const TOKEN_STORAGE_KEY = 'access_token';
+// The page calls the Next.js route /api/scorecard (src/app/api/scorecard/route.ts).
+// That route reads the login cookie and forwards the request to FastAPI.
 
 // Section name links to `${SECTION_PAGE_BASE}/${section_id}`.
-// Leave empty ('') until you know the Sections Audit page route, e.g. '/sections-audit'.
+// Leave empty ('') until you know the Sections Audit page route, e.g. '/sections'.
 const SECTION_PAGE_BASE = '';
 
 /* ------------------------------------------------------------------------- */
@@ -48,25 +44,17 @@ class ApiError extends Error {
   }
 }
 
-function authHeaders(): HeadersInit {
-  try {
-    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
-
 async function fetchScorecard(signal: AbortSignal): Promise<ScorecardResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/scorecard`, {
-    signal,
-    cache: 'no-store',
-    headers: authHeaders(),
-  });
-  if (res.status === 401) throw new ApiError('Your session has expired. Please sign in again.', 401);
-  if (res.status === 403) throw new ApiError('You do not have permission to view the scorecard.', 403);
-  if (res.status === 404) throw new ApiError('No scorecard data has been loaded yet.', 404);
-  if (!res.ok) throw new ApiError(`The server returned an error (${res.status}).`, res.status);
+  const res = await fetch('/api/scorecard', { signal, cache: 'no-store' });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string };
+    if (res.status === 401) throw new ApiError('Your session has expired. Please sign in again.', 401);
+    if (res.status === 403) throw new ApiError('You do not have permission to view the scorecard.', 403);
+    if (res.status === 404) throw new ApiError(body.detail || 'No scorecard data has been loaded yet.', 404);
+    throw new ApiError(body.detail || `The server returned an error (${res.status}).`, res.status);
+  }
+
   const json = (await res.json()) as ScorecardResponse;
   if (!json || !json.cycle || !Array.isArray(json.sections)) {
     throw new ApiError('The server sent an unexpected response.', 500);
